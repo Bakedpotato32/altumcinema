@@ -25,9 +25,9 @@ export const checkDeviceStoragePermissions = async () => {
     return { granted: true };
   }
   try {
-    return await MediaScanner.checkPermissions();
+    return await MediaScanner.checkStoragePermissions();
   } catch (err) {
-    console.warn('Native checkPermissions error:', err);
+    console.warn('Native checkStoragePermissions error:', err);
     return { granted: false };
   }
 };
@@ -63,5 +63,15 @@ export const scanAllDeviceVideos = async () => {
   } catch (err) {
     console.error('Native scanVideos error:', err);
     return [];
+  }
+};
+
+export const fetchVideoThumbnail = async (id, path) => {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const res = await MediaScanner.getVideoThumbnail({ id, path });
+    return res?.thumbnail || null;
+  } catch (e) {
+    return null;
   }
 };

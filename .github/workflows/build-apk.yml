@@ -47,7 +47,7 @@ jobs:
       - name: Generate High-Resolution Android App Icons from icon.png
         run: |
           if [ -f "icon.png" ]; then
-            python3 -m pip install --break-system-packages Pillow 2>/dev/null || python3 -m pip install Pillow
+            python3 -m pip install pillow --break-system-packages 2>/dev/null || python3 -m pip install pillow
             python3 -c "
           from PIL import Image
           import os
@@ -81,7 +81,6 @@ jobs:
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\
-            <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\
             <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\
             <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' android/app/src/main/AndroidManifest.xml || true
 

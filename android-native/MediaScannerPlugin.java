@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.ContentUris;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.media.ThumbnailUtils;
@@ -14,6 +15,7 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Size;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -31,18 +33,12 @@ import java.util.Map;
     name = "MediaScanner",
     permissions = {
         @Permission(
-            strings = {
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO
-            },
-            alias = "mediaVideos"
+            strings = { Manifest.permission.READ_MEDIA_VIDEO },
+            alias = "videos"
         ),
         @Permission(
-            strings = {
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            },
-            alias = "legacyStorage"
+            strings = { Manifest.permission.READ_EXTERNAL_STORAGE },
+            alias = "storage"
         )
     }
 )
@@ -62,20 +58,20 @@ public class MediaScannerPlugin extends Plugin {
                 }
                 call.resolve();
             } catch (Exception e) {
-                call.reject("Failed to set orientation: " + e.getMessage());
+                call.reject("Orientation error: " + e.getMessage());
             }
         });
     }
 
     @PluginMethod
-    public void checkPermissions(PluginCall call) {
+    public void checkStoragePermissions(PluginCall call) {
         boolean granted = false;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            granted = getPermissionState("mediaVideos") == com.getcapacitor.PermissionState.GRANTED;
+        if (Build.VERSION.SDK_INT >= 33) {
+            granted = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
         } else {
-            granted = getPermissionState("legacyStorage") == com.getcapacitor.PermissionState.GRANTED;
+            granted = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT >= 30) {
             if (Environment.isExternalStorageManager()) {
                 granted = true;
             }
@@ -87,16 +83,16 @@ public class MediaScannerPlugin extends Plugin {
 
     @PluginMethod
     public void requestStoragePermissions(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissionForAlias("mediaVideos", call, "permissionCallback");
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissionForAlias("videos", call, "storageCallback");
         } else {
-            requestPermissionForAlias("legacyStorage", call, "permissionCallback");
+            requestPermissionForAlias("storage", call, "storageCallback");
         }
     }
 
     @PermissionCallback
-    private void permissionCallback(PluginCall call) {
-        checkPermissions(call);
+    private void storageCallback(PluginCall call) {
+        checkStoragePermissions(call);
     }
 
     @PluginMethod
@@ -125,123 +121,151 @@ public class MediaScannerPlugin extends Plugin {
 
     @PluginMethod
     public void scanVideos(PluginCall call) {
-        JSArray foldersArray = new JSArray();
-        Map<String, JSArray> folderMap = new HashMap<>();
-        Map<String, JSObject> folderMetaMap = new HashMap<>();
+        getBridge().execute(() -> {
+            JSArray foldersArray = new JSArray();
+            Map<String, JSArray> folderMap = new HashMap<>();
+            Map<String, JSObject> folderMetaMap = new HashMap<>();
 
-        try {
-            Uri collection;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL);
-            } else {
-                collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-            }
+            try {
+                Uri collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
 
-            String[] projection = new String[] {
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DATA,
-                MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.SIZE,
-                MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
-                MediaStore.Video.Media.DATE_MODIFIED
-            };
+                String[] projection = new String[] {
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DATA,
+                    MediaStore.Video.Media.DURATION,
+                    MediaStore.Video.Media.SIZE,
+                    MediaStore.Video.Media.BUCKET_DISPLAY_NAME
+                };
 
-            String sortOrder = MediaStore.Video.Media.DATE_MODIFIED + " DESC";
+                String sortOrder = MediaStore.Video.Media.DATE_MODIFIED + " DESC";
 
-            try (Cursor cursor = getContext().getContentResolver().query(collection, projection, null, null, sortOrder)) {
-                if (cursor != null) {
-                    int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID);
-                    int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME);
-                    int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA);
-                    int durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION);
-                    int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
-                    int bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME);
+                try (Cursor cursor = getContext().getContentResolver().query(collection, projection, null, null, sortOrder)) {
+                    if (cursor != null) {
+                        int idColumn = cursor.getColumnIndex(MediaStore.Video.Media._ID);
+                        int nameColumn = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME);
+                        int dataColumn = cursor.getColumnIndex(MediaStore.Video.Media.DATA);
+                        int durationColumn = cursor.getColumnIndex(MediaStore.Video.Media.DURATION);
+                        int sizeColumn = cursor.getColumnIndex(MediaStore.Video.Media.SIZE);
+                        int bucketColumn = cursor.getColumnIndex(MediaStore.Video.Media.BUCKET_DISPLAY_NAME);
 
-                    int count = 0;
-                    while (cursor.moveToNext()) {
-                        long id = cursor.getLong(idColumn);
-                        String name = cursor.getString(nameColumn);
-                        String path = cursor.getString(dataColumn);
-                        long durationMs = cursor.getLong(durationColumn);
-                        long sizeBytes = cursor.getLong(sizeColumn);
-                        String folder = cursor.getString(bucketColumn);
+                        int thumbCount = 0;
+                        while (cursor.moveToNext()) {
+                            long id = cursor.getLong(idColumn);
+                            String name = nameColumn != -1 ? cursor.getString(nameColumn) : "";
+                            String path = dataColumn != -1 ? cursor.getString(dataColumn) : "";
+                            long durationMs = durationColumn != -1 ? cursor.getLong(durationColumn) : 0;
+                            long sizeBytes = sizeColumn != -1 ? cursor.getLong(sizeColumn) : 0;
+                            String folder = bucketColumn != -1 ? cursor.getString(bucketColumn) : "Videos";
 
-                        if (folder == null || folder.isEmpty()) {
-                            folder = "Internal Storage";
-                        }
-                        if (name == null || name.isEmpty()) {
-                            name = path != null ? new File(path).getName() : "Video_" + id;
-                        }
-
-                        Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
-
-                        // Native Video Thumbnail Generation
-                        String thumbBase64 = null;
-                        try {
-                            Bitmap bmp = null;
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && path != null && new File(path).exists()) {
-                                bmp = ThumbnailUtils.createVideoThumbnail(new File(path), new Size(320, 180), null);
-                            } else if (path != null && new File(path).exists()) {
-                                bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(320, 180), null);
+                            if (folder == null || folder.trim().isEmpty()) {
+                                folder = "Device Videos";
+                            }
+                            if (name == null || name.trim().isEmpty()) {
+                                name = path != null && !path.isEmpty() ? new File(path).getName() : "Video_" + id;
                             }
 
-                            if (bmp != null) {
-                                ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                                bmp.compress(Bitmap.CompressFormat.JPEG, 65, stream);
-                                byte[] byteArray = stream.toByteArray();
-                                thumbBase64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
-                                bmp.recycle();
+                            // Capture lightweight thumbnail for the first 25 videos
+                            String thumbBase64 = null;
+                            if (thumbCount < 25) {
+                                try {
+                                    Bitmap bmp = null;
+                                    if (Build.VERSION.SDK_INT >= 29) {
+                                        Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
+                                        bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(200, 112), null);
+                                    } else if (path != null && new File(path).exists()) {
+                                        bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
+                                    }
+
+                                    if (bmp != null) {
+                                        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                        bmp.compress(Bitmap.CompressFormat.JPEG, 60, stream);
+                                        byte[] byteArray = stream.toByteArray();
+                                        thumbBase64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
+                                        bmp.recycle();
+                                        thumbCount++;
+                                    }
+                                } catch (Throwable ignored) {}
                             }
-                        } catch (Throwable ignored) {}
 
-                        JSObject videoObj = new JSObject();
-                        videoObj.put("id", "media_" + id);
-                        videoObj.put("name", name);
-                        videoObj.put("path", path != null ? path : "");
-                        videoObj.put("url", path != null ? path : contentUri.toString());
-                        videoObj.put("duration", durationMs > 0 ? (int)(durationMs / 1000) : 0);
-                        videoObj.put("currentTime", 0);
-                        videoObj.put("thumbnail", thumbBase64);
+                            JSObject videoObj = new JSObject();
+                            videoObj.put("id", "media_" + id);
+                            videoObj.put("name", name);
+                            videoObj.put("path", path != null ? path : "");
+                            videoObj.put("url", path != null ? path : "");
+                            videoObj.put("duration", durationMs > 0 ? (int)(durationMs / 1000) : 0);
+                            videoObj.put("currentTime", 0);
+                            if (thumbBase64 != null) {
+                                videoObj.put("thumbnail", thumbBase64);
+                            }
 
-                        double sizeMb = sizeBytes > 0 ? (double)sizeBytes / (1024 * 1024) : 0;
-                        videoObj.put("size", sizeMb > 1024 ? String.format("%.2f GB", sizeMb / 1024) : String.format("%.1f MB", sizeMb));
-                        videoObj.put("folder", folder);
-                        videoObj.put("date", "Recent");
+                            double sizeMb = sizeBytes > 0 ? (double)sizeBytes / (1024 * 1024) : 0;
+                            videoObj.put("size", sizeMb > 1024 ? String.format("%.2f GB", sizeMb / 1024) : String.format("%.1f MB", sizeMb));
+                            videoObj.put("folder", folder);
+                            videoObj.put("date", "Recent");
 
-                        if (!folderMap.containsKey(folder)) {
-                            folderMap.put(folder, new JSArray());
+                            if (!folderMap.containsKey(folder)) {
+                                folderMap.put(folder, new JSArray());
 
-                            JSObject folderMeta = new JSObject();
-                            folderMeta.put("id", "f_" + folder.toLowerCase().replaceAll("[^a-z0-9]", "_"));
-                            folderMeta.put("name", folder);
-                            folderMeta.put("path", path != null ? new File(path).getParent() : folder);
-                            folderMetaMap.put(folder, folderMeta);
+                                JSObject folderMeta = new JSObject();
+                                folderMeta.put("id", "f_" + folder.toLowerCase().replaceAll("[^a-z0-9]", "_"));
+                                folderMeta.put("name", folder);
+                                folderMeta.put("path", path != null ? new File(path).getParent() : folder);
+                                folderMetaMap.put(folder, folderMeta);
+                            }
+
+                            folderMap.get(folder).put(videoObj);
                         }
-
-                        folderMap.get(folder).put(videoObj);
-                        count++;
                     }
                 }
-            }
 
-            for (Map.Entry<String, JSArray> entry : folderMap.entrySet()) {
-                String folderName = entry.getKey();
-                JSArray videos = entry.getValue();
-                JSObject folderObj = folderMetaMap.get(folderName);
-                folderObj.put("videoCount", videos.length());
-                folderObj.put("totalSize", videos.length() + " videos");
-                folderObj.put("videos", videos);
-                foldersArray.put(folderObj);
-            }
+                for (Map.Entry<String, JSArray> entry : folderMap.entrySet()) {
+                    String folderName = entry.getKey();
+                    JSArray videos = entry.getValue();
+                    JSObject folderObj = folderMetaMap.get(folderName);
+                    folderObj.put("videoCount", videos.length());
+                    folderObj.put("totalSize", videos.length() + " videos");
+                    folderObj.put("videos", videos);
+                    foldersArray.put(folderObj);
+                }
 
-            JSObject res = new JSObject();
-            res.put("folders", foldersArray);
-            call.resolve(res);
-        } catch (Exception e) {
-            call.reject("Failed to scan videos: " + e.getMessage(), e);
-        }
+                JSObject res = new JSObject();
+                res.put("folders", foldersArray);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Scan error: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void getVideoThumbnail(PluginCall call) {
+        long id = call.getInt("id", -1);
+        String path = call.getString("path", "");
+        getBridge().execute(() -> {
+            try {
+                Bitmap bmp = null;
+                if (Build.VERSION.SDK_INT >= 29 && id != -1) {
+                    Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
+                    bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(200, 112), null);
+                } else if (!path.isEmpty() && new File(path).exists()) {
+                    bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
+                }
+                if (bmp != null) {
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 60, stream);
+                    byte[] byteArray = stream.toByteArray();
+                    String b64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
+                    bmp.recycle();
+                    JSObject ret = new JSObject();
+                    ret.put("thumbnail", b64);
+                    call.resolve(ret);
+                } else {
+                    call.reject("No thumbnail available");
+                }
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
     }
 }

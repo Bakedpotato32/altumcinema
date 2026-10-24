@@ -1,15 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Clock, Folder, Shield, Lock } from 'lucide-react';
+import { Play, Clock, Folder, Lock } from 'lucide-react';
+import { fetchVideoThumbnail } from '../services/nativeMedia';
 import { triggerHaptic } from '../services/haptics';
 
 export const VideoFeedCard = ({ video, onPlayVideo, onLockToVault }) => {
-  const duration = video.duration || 100;
+  const [thumb, setThumb] = useState(video.thumbnail);
+
+  const duration = video.duration || 0;
   const current = video.currentTime || 0;
   const progressPercent = duration > 0 ? Math.min(100, (current / duration) * 100) : 0;
 
+  useEffect(() => {
+    if (!thumb && video.path) {
+      const rawId = parseInt((video.id || '').replace('media_', ''), 10) || -1;
+      fetchVideoThumbnail(rawId, video.path).then((b64) => {
+        if (b64) setThumb(b64);
+      });
+    }
+  }, [video]);
+
   const formatTime = (sec) => {
-    if (isNaN(sec)) return '0:00';
+    if (!sec || isNaN(sec)) return '0:00';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -24,11 +36,11 @@ export const VideoFeedCard = ({ video, onPlayVideo, onLockToVault }) => {
       }}
       className="rounded-3xl glass-panel border border-white/90 overflow-hidden shadow-[0_6px_25px_rgb(0,0,0,0.04)] cursor-pointer hover:border-blue-300 transition-all"
     >
-      {/* 16:9 YouTube Thumbnail Container */}
+      {/* 16:9 Thumbnail Container */}
       <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
-        {video.thumbnail ? (
+        {thumb ? (
           <img
-            src={video.thumbnail}
+            src={thumb}
             alt={video.name}
             className="w-full h-full object-cover"
           />
@@ -43,13 +55,15 @@ export const VideoFeedCard = ({ video, onPlayVideo, onLockToVault }) => {
         {/* Top Folder Tag Badge */}
         <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
           <Folder size={11} className="text-blue-400" />
-          <span>{video.folder || 'Downloads'}</span>
+          <span>{video.folder || 'Videos'}</span>
         </div>
 
         {/* Bottom Timestamp Chip */}
-        <span className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-sm text-[10px] font-mono font-bold text-white shadow-md">
-          {formatTime(duration)}
-        </span>
+        {duration > 0 && (
+          <span className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-sm text-[10px] font-mono font-bold text-white shadow-md">
+            {formatTime(duration)}
+          </span>
+        )}
 
         {/* YouTube Red Playback Progress Bar */}
         {progressPercent > 0 && (
@@ -85,7 +99,6 @@ export const VideoFeedCard = ({ video, onPlayVideo, onLockToVault }) => {
           )}
         </div>
 
-        {/* 1-Tap Lock to Private Vault Button */}
         <motion.button
           whileTap={{ scale: 0.88 }}
           onClick={(e) => {

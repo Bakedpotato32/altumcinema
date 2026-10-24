@@ -15,18 +15,21 @@ export const GestureOverlay = ({
   currentTime,
   onSeekCommit,
   zoomScale,
-  setZoomScale
+  setZoomScale,
+  onPressHold2xStart,
+  onPressHold2xEnd,
+  isHold2xActive
 }) => {
   const containerRef = useRef(null);
   const touchStartRef = useRef(null);
   const pinchStartRef = useRef(null);
   const lastTapRef = useRef({ time: 0, x: 0 });
+  const hold2xTimerRef = useRef(null);
 
-  const [activeGesture, setActiveGesture] = useState(null); // 'brightness' | 'volume' | 'seek' | 'pinch'
+  const [activeGesture, setActiveGesture] = useState(null);
   const [seekOffset, setSeekOffset] = useState(0);
   const [doubleTapSide, setDoubleTapSide] = useState(null);
 
-  // Measure distance between 2 touch points
   const getPinchDistance = (e) => {
     const t1 = e.touches[0];
     const t2 = e.touches[1];
@@ -34,8 +37,8 @@ export const GestureOverlay = ({
   };
 
   const handleTouchStart = (e) => {
-    // 2-Finger Pinch to Zoom Detection
     if (e.touches.length === 2) {
+      if (hold2xTimerRef.current) clearTimeout(hold2xTimerRef.current);
       pinchStartRef.current = {
         dist: getPinchDistance(e),
         initialScale: zoomScale
@@ -63,10 +66,16 @@ export const GestureOverlay = ({
       isLeft: x < rect.width / 2,
       moved: false
     };
+
+    hold2xTimerRef.current = setTimeout(() => {
+      if (touchStartRef.current && !touchStartRef.current.moved) {
+        triggerHaptic('medium');
+        onPressHold2xStart();
+      }
+    }, 360);
   };
 
   const handleTouchMove = (e) => {
-    // Pinch to Zoom scaling
     if (e.touches.length === 2 && pinchStartRef.current) {
       const currentDist = getPinchDistance(e);
       const factor = currentDist / pinchStartRef.current.dist;
@@ -83,13 +92,19 @@ export const GestureOverlay = ({
     const currentY = touch.clientY - rect.top;
 
     const deltaX = currentX - touchStartRef.current.x;
-    const deltaY = touchStartRef.current.y - currentY; // Up is positive
+    const deltaY = touchStartRef.current.y - currentY;
 
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
     if (!touchStartRef.current.moved) {
       if (absX > 14 || absY > 14) {
+        if (hold2xTimerRef.current) {
+          clearTimeout(hold2xTimerRef.current);
+          hold2xTimerRef.current = null;
+        }
+        if (isHold2xActive) onPressHold2xEnd();
+
         touchStartRef.current.moved = true;
         if (absX > absY) {
           setActiveGesture('seek');
@@ -108,7 +123,6 @@ export const GestureOverlay = ({
       const nextVal = Math.min(100, Math.max(10, touchStartRef.current.initialBrightness + deltaPercent));
       setBrightness(Math.round(nextVal));
     } else if (activeGesture === 'volume') {
-      // 0 to 200% volume scale
       const deltaPercent = (deltaY / (rect.height * 0.65)) * 200;
       const nextVol = Math.min(200, Math.max(0, touchStartRef.current.initialVolume + deltaPercent));
       setVolume(Math.round(nextVol));
@@ -120,6 +134,17 @@ export const GestureOverlay = ({
   };
 
   const handleTouchEnd = () => {
+    if (hold2xTimerRef.current) {
+      clearTimeout(hold2xTimerRef.current);
+      hold2xTimerRef.current = null;
+    }
+
+    if (isHold2xActive) {
+      onPressHold2xEnd();
+      touchStartRef.current = null;
+      return;
+    }
+
     pinchStartRef.current = null;
     const start = touchStartRef.current;
     touchStartRef.current = null;
@@ -135,7 +160,6 @@ export const GestureOverlay = ({
 
     setActiveGesture(null);
 
-    // Tap and Double-Tap Skip
     if (start && !start.moved) {
       const now = Date.now();
       const timeDiff = now - lastTapRef.current.time;
@@ -175,6 +199,21 @@ export const GestureOverlay = ({
       onTouchEnd={handleTouchEnd}
       className="absolute inset-0 z-20 overflow-hidden flex items-center justify-center pointer-events-auto"
     >
+      {/* YouTube-Style Press-and-Hold 2.0x Floating Top Badge */}
+      <AnimatePresence>
+        {isHold2xActive && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="absolute top-16 px-4 py-1.5 rounded-full bg-blue-600/80 backdrop-blur-xl border border-blue-400 text-white shadow-2xl flex items-center gap-1.5 font-mono text-xs font-black z-30"
+          >
+            <FastForward size={14} className="animate-pulse" />
+            <span>2.0x Boost &gt;&gt;</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Double Tap Skip Ripple HUD */}
       <AnimatePresence>
         {doubleTapSide === 'left' && (
@@ -222,7 +261,7 @@ export const GestureOverlay = ({
         )}
       </AnimatePresence>
 
-      {/* Volume HUD Card (Supports 200% Software Volume Boost) */}
+      {/* Volume HUD Card (200% Boost) */}
       <AnimatePresence>
         {activeGesture === 'volume' && (
           <motion.div

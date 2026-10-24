@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Film, HardDrive, ShieldCheck, Sliders, Play, Plus, FolderPlus, RefreshCw } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { AmbientBlobs } from './components/AmbientBlobs';
 import { TopHeader } from './components/TopHeader';
 import { SearchBarAndFilters } from './components/SearchBarAndFilters';
@@ -21,7 +22,7 @@ import {
   getVaultPin, saveVaultPin,
   getVaultVideos, moveVideoToVault, restoreVideoFromVault
 } from './services/storage';
-import { scanDeviceStorage } from './services/deviceScanner';
+import { checkDeviceStoragePermissions, scanAllDeviceVideos } from './services/nativeMedia';
 import { generateVideoThumbnail } from './services/thumbnail';
 import { triggerHaptic } from './services/haptics';
 
@@ -48,14 +49,21 @@ export default function App() {
 
   const fileInputRef = useRef(null);
 
+  // On App Launch: Check REAL OS permission status
   useEffect(() => {
-    const granted = localStorage.getItem('altum_storage_permission_granted');
-    if (!granted) {
-      setHasPermission(false);
-    } else {
+    const initializeStorage = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const status = await checkDeviceStoragePermissions();
+        if (!status || !status.granted) {
+          setHasPermission(false);
+          return;
+        }
+      }
+      setHasPermission(true);
       triggerAutoScan();
-    }
+    };
 
+    initializeStorage();
     setFolders(getStoredFolders());
     setVaultVideos(getVaultVideos());
     setVaultPin(getVaultPin());
@@ -66,7 +74,7 @@ export default function App() {
 
   const triggerAutoScan = async () => {
     setIsScanning(true);
-    const scanned = await scanDeviceStorage();
+    const scanned = await scanAllDeviceVideos();
     if (scanned && scanned.length > 0) {
       setFolders(scanned);
       saveFolders(scanned);
@@ -75,7 +83,6 @@ export default function App() {
   };
 
   const handlePermissionGranted = () => {
-    localStorage.setItem('altum_storage_permission_granted', 'true');
     setHasPermission(true);
     triggerAutoScan();
   };
@@ -120,10 +127,18 @@ export default function App() {
 
   const handlePlayVideo = (video) => {
     triggerHaptic('medium');
+
+    // On native Android, convert absolute path to local webview streaming URL
+    let streamUrl = video.url;
+    if (Capacitor.isNativePlatform() && video.path) {
+      streamUrl = Capacitor.convertFileSrc(video.path);
+    }
+
     const playable = {
       ...video,
-      url: video.url || URL.createObjectURL(new Blob([], { type: 'video/mp4' }))
+      url: streamUrl || URL.createObjectURL(new Blob([], { type: 'video/mp4' }))
     };
+
     setActiveVideo(playable);
     if (!video.isVaulted) {
       setRecentVideo(video);

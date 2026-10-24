@@ -1,33 +1,36 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, HardDrive, Film, Sparkles, AlertCircle } from 'lucide-react';
-import { requestDeviceStoragePermissions } from '../services/permissions';
+import { ShieldCheck, HardDrive, Film, Sparkles, ExternalLink } from 'lucide-react';
+import { requestDeviceStoragePermissions, openAllFilesSettings } from '../services/nativeMedia';
 import { triggerHaptic } from '../services/haptics';
 
 export const PermissionModal = ({ isOpen, onGranted }) => {
   const [isRequesting, setIsRequesting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [showSettingsOption, setShowSettingsOption] = useState(false);
 
   if (!isOpen || typeof document === 'undefined') return null;
 
   const handleGrant = async () => {
     triggerHaptic('medium');
     setIsRequesting(true);
-    setErrorMessage('');
 
-    const granted = await requestDeviceStoragePermissions();
+    const res = await requestDeviceStoragePermissions();
     setIsRequesting(false);
 
-    if (granted) {
+    if (res && res.granted) {
       triggerHaptic('success');
       onGranted();
     } else {
       triggerHaptic('error');
-      setErrorMessage(
-        'Storage permission is required for AltumCinema to discover video folders automatically.'
-      );
+      // On Android 11-15, if standard dialog is denied or skipped, allow direct settings toggle
+      setShowSettingsOption(true);
     }
+  };
+
+  const handleOpenSettings = async () => {
+    triggerHaptic('light');
+    await openAllFilesSettings();
   };
 
   return createPortal(
@@ -38,7 +41,7 @@ export const PermissionModal = ({ isOpen, onGranted }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
         />
 
         {/* Bottom Sheet Card */}
@@ -62,22 +65,22 @@ export const PermissionModal = ({ isOpen, onGranted }) => {
               Device Storage Setup
             </span>
             <h3 className="text-xl font-black text-slate-900 tracking-tight">
-              Grant Storage Access
+              Access Device Media
             </h3>
             <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              To automatically display your videos, movie downloads, and WhatsApp clips like MX Player, Android requires you to grant storage access.
+              AltumCinema automatically scans your phone's directories (*Downloads, Camera, WhatsApp, Movies*) so all your clips are ready to play offline.
             </p>
           </div>
 
           {/* Feature Highlights */}
-          <div className="space-y-2.5 mb-5">
+          <div className="space-y-2.5 mb-6">
             <div className="flex items-center space-x-3.5 p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
               <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
                 <Film size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-slate-900">Auto Directory Discovery</h4>
-                <p className="text-[11px] text-slate-500">Auto-scans Camera, WhatsApp, Downloads, and Movies.</p>
+                <p className="text-[11px] text-slate-500">Auto-organizes Camera, WhatsApp, Downloads, and Movies.</p>
               </div>
             </div>
 
@@ -92,13 +95,7 @@ export const PermissionModal = ({ isOpen, onGranted }) => {
             </div>
           </div>
 
-          {errorMessage && (
-            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium mb-4 flex items-center gap-2">
-              <AlertCircle size={16} className="shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
+          {/* Primary Action Button */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={handleGrant}
@@ -106,8 +103,22 @@ export const PermissionModal = ({ isOpen, onGranted }) => {
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 border border-blue-400/30 flex items-center justify-center gap-2"
           >
             <ShieldCheck size={18} />
-            <span>{isRequesting ? 'Requesting Permission...' : 'Allow & Start Scanning'}</span>
+            <span>{isRequesting ? 'Requesting System Access...' : 'Allow Storage Access'}</span>
           </motion.button>
+
+          {/* Fallback Option for Android 11+ "All Files Access" */}
+          {showSettingsOption && (
+            <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleOpenSettings}
+              className="w-full mt-3 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-200"
+            >
+              <ExternalLink size={14} />
+              <span>Enable in System Settings</span>
+            </motion.button>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>,

@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/* Strict Light-Theme Neo-Glass Primitives */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.05);
+}
+
+.glass-dock {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 45px -10px rgba(30, 41, 59, 0.12);
+}
+
+.glass-card-frosted {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.04);
+}
+
+/* Smooth GPU Keyframe Transforms */
+@keyframes floatBlob1 {
+  0%, 100% { transform: translate3d(0px, 0px, 0px) scale(1); }
+  50% { transform: translate3d(35px, -35px, 0px) scale(1.06); }
+}
+
+@keyframes floatBlob2 {
+  0%, 100% { transform: translate3d(0px, 0px, 0px) scale(1); }
+  50% { transform: translate3d(-30px, 30px, 0px) scale(0.96); }
+}
+
+.animate-blob-1 {
+  animation: floatBlob1 14s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-blob-2 {
+  animation: floatBlob2 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Hide scrollbars */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-tap-highlight-color: transparent;
+}

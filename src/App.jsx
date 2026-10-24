@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Film, HardDrive, ShieldCheck, Sliders, Play, Plus, FolderPlus, RefreshCw } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import { AmbientBlobs } from './components/AmbientBlobs';
 import { TopHeader } from './components/TopHeader';
 import { SearchBarAndFilters } from './components/SearchBarAndFilters';
@@ -48,8 +49,55 @@ export default function App() {
   const [keypadMode, setKeypadMode] = useState('unlock');
 
   const fileInputRef = useRef(null);
+  const playerBackHandlerRef = useRef(null);
 
-  // On App Launch: Check REAL OS permission status
+  // Native Android Hardware / Gesture Back Button Handling
+  useEffect(() => {
+    let backListener = null;
+
+    if (Capacitor.isNativePlatform()) {
+      backListener = CapApp.addListener('backButton', () => {
+        // Priority 1: Video Player Child Modals or Player itself
+        if (playerBackHandlerRef.current) {
+          const handled = playerBackHandlerRef.current();
+          if (handled) return;
+        }
+
+        if (activeVideo) {
+          setActiveVideo(null);
+          return;
+        }
+
+        // Priority 2: PIN Keypad Modal
+        if (isKeypadOpen) {
+          setIsKeypadOpen(false);
+          return;
+        }
+
+        // Priority 3: Inside a folder view -> go back to all folders
+        if (selectedFolder) {
+          setSelectedFolder(null);
+          return;
+        }
+
+        // Priority 4: On other tabs -> return to Home (Videos)
+        if (activeTab !== 'videos') {
+          setActiveTab('videos');
+          return;
+        }
+
+        // Priority 5: At root screen -> exit app
+        CapApp.exitApp();
+      });
+    }
+
+    return () => {
+      if (backListener) {
+        backListener.then((sub) => sub.remove()).catch(() => {});
+      }
+    };
+  }, [activeVideo, isKeypadOpen, selectedFolder, activeTab]);
+
   useEffect(() => {
     const initializeStorage = async () => {
       if (Capacitor.isNativePlatform()) {
@@ -128,7 +176,6 @@ export default function App() {
   const handlePlayVideo = (video) => {
     triggerHaptic('medium');
 
-    // On native Android, convert absolute path to local webview streaming URL
     let streamUrl = video.url;
     if (Capacitor.isNativePlatform() && video.path) {
       streamUrl = Capacitor.convertFileSrc(video.path);
@@ -389,6 +436,9 @@ export default function App() {
           onClose={() => setActiveVideo(null)}
           settings={settings}
           onUpdateSettings={setSettings}
+          onRegisterBackHandler={(handler) => {
+            playerBackHandlerRef.current = handler;
+          }}
         />
       )}
     </div>

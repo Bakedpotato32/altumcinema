@@ -4,7 +4,7 @@ import {
   Play, Pause, ArrowLeft, RotateCcw, RotateCw, 
   Lock, Unlock, Sliders, Crop, PictureInPicture2,
   Subtitles, Gauge, Camera, Repeat, Volume2, 
-  MoreHorizontal, Sparkles, Rotate3D, Moon
+  MoreHorizontal, Sparkles, Rotate3D, Moon, Smartphone, Monitor
 } from 'lucide-react';
 import { GestureOverlay } from './GestureOverlay';
 import { GlassSelect } from './GlassSelect';
@@ -23,8 +23,9 @@ import { captureVideoFrame } from '../services/snapshot';
 import { triggerHaptic } from '../services/haptics';
 import { saveVideoProgress } from '../services/storage';
 
-export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
+export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegisterBackHandler }) => {
   const videoRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
@@ -37,18 +38,18 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [aspectRatio, setAspectRatio] = useState(settings.aspectRatio || 'fit');
 
-  // Press-and-Hold 2.0x Speed State
+  // Press-and-Hold 2.0x Speed
   const [isHold2xActive, setIsHold2xActive] = useState(false);
   const previousSpeedRef = useRef(1.0);
 
   // Screen Orientation State ('auto' | 'landscape' | 'portrait')
   const [orientationMode, setOrientationMode] = useState('auto');
 
-  // Sleep Timer State (in remaining seconds, or null)
+  // Sleep Timer
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState(null);
   const [isSleepTimerModalOpen, setIsSleepTimerModalOpen] = useState(false);
 
-  // Intro / Anime OP Skip duration (default: 85 seconds)
+  // Anime OP Skip duration
   const [introSkipDuration, setIntroSkipDuration] = useState(settings.introSkipDuration || 85);
 
   // Modals state
@@ -62,18 +63,18 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
   const [isLooperOpen, setIsLooperOpen] = useState(false);
   const [isAudioTrackModalOpen, setIsAudioTrackModalOpen] = useState(false);
 
-  // Audio Tracks state
+  // Audio Tracks
   const [audioTracksList, setAudioTracksList] = useState([]);
   const [activeAudioIndex, setActiveAudioIndex] = useState(0);
 
-  // A-B Looper state
+  // A-B Looper
   const [loopA, setLoopA] = useState(null);
   const [loopB, setLoopB] = useState(null);
 
-  // Snapshot flash state
+  // Snapshot flash
   const [isShutterFlashing, setIsShutterFlashing] = useState(false);
 
-  // Subtitles state
+  // Subtitles
   const [subtitles, setSubtitles] = useState([]);
   const [currentSubtitleText, setCurrentSubtitleText] = useState('');
   const [subtitleSettings, setSubtitleSettings] = useState(
@@ -89,6 +90,57 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
   );
 
   const controlsTimeoutRef = useRef(null);
+
+  // Screen WakeLock: Prevent screen timeout while video plays
+  useEffect(() => {
+    const acquireWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {}
+    };
+
+    if (isPlaying) {
+      acquireWakeLock();
+    } else if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, [isPlaying]);
+
+  // Priority Back Button Stack for Child Modals inside Player
+  useEffect(() => {
+    if (onRegisterBackHandler) {
+      onRegisterBackHandler(() => {
+        if (isQuickToolsOpen) { setIsQuickToolsOpen(false); return true; }
+        if (isSubtitleModalOpen) { setIsSubtitleModalOpen(false); return true; }
+        if (isSubtitleSearchOpen) { setIsSubtitleSearchOpen(false); return true; }
+        if (isSubtitleExplorerOpen) { setIsSubtitleExplorerOpen(false); return true; }
+        if (isAudioTrackModalOpen) { setIsAudioTrackModalOpen(false); return true; }
+        if (isSpeedModalOpen) { setIsSpeedModalOpen(false); return true; }
+        if (isSleepTimerModalOpen) { setIsSleepTimerModalOpen(false); return true; }
+        if (isAspectSelectOpen) { setIsAspectSelectOpen(false); return true; }
+        if (isEQOpen) { setIsEQOpen(false); return true; }
+        if (isLooperOpen) { setIsLooperOpen(false); return true; }
+        if (isLocked) { setIsLocked(false); return true; }
+        // If no modal open, close player and return to library
+        onClose();
+        return true;
+      });
+    }
+  }, [
+    isQuickToolsOpen, isSubtitleModalOpen, isSubtitleSearchOpen,
+    isSubtitleExplorerOpen, isAudioTrackModalOpen, isSpeedModalOpen,
+    isSleepTimerModalOpen, isAspectSelectOpen, isEQOpen, isLooperOpen, isLocked
+  ]);
 
   useEffect(() => {
     if (videoRef.current && (volume > 100 || settings?.audio?.bassBoost > 0)) {
@@ -116,7 +168,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     };
   }, [video]);
 
-  // Sleep Timer Countdown & Smooth Volume Fade
+  // Sleep Timer Countdown & Volume Fade
   useEffect(() => {
     if (sleepTimerSeconds === null) return;
 
@@ -124,14 +176,12 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
       setSleepTimerSeconds((prev) => {
         if (prev === null) return null;
         if (prev <= 1) {
-          // Timer finished: pause video
           if (videoRef.current) videoRef.current.pause();
           setIsPlaying(false);
           setShowControls(true);
           return null;
         }
 
-        // Smooth volume fade during last 30 seconds
         if (prev <= 30 && videoRef.current) {
           const fadeFactor = prev / 30;
           videoRef.current.volume = Math.max(0, (volume / 100) * fadeFactor);
@@ -241,7 +291,6 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     }
   };
 
-  // YouTube-Style Press-and-Hold 2.0x Fast Forward
   const handlePressHold2xStart = () => {
     if (!videoRef.current) return;
     previousSpeedRef.current = playbackSpeed;
@@ -255,7 +304,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     setIsHold2xActive(false);
   };
 
-  // Screen Orientation Controller
+  // Screen Orientation Controller: Cycles Auto -> Landscape -> Portrait
   const handleToggleOrientation = async () => {
     triggerHaptic('selection');
     const nextMode = orientationMode === 'auto' ? 'landscape' : orientationMode === 'landscape' ? 'portrait' : 'auto';
@@ -272,10 +321,8 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     }
   };
 
-  // Sleep Timer Handler
   const handleSetSleepTimer = (minutes) => {
     if (minutes === -1) {
-      // End of video: remaining duration
       const remainingSec = Math.max(10, Math.floor(duration - currentTime));
       setSleepTimerSeconds(remainingSec);
     } else {
@@ -447,13 +494,19 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
 
               {/* Action Tray */}
               <div className="flex items-center space-x-2 shrink-0">
-                {/* Screen Orientation Switcher */}
+                {/* Orientation Button 1: TOP HUD */}
                 <button
                   onClick={handleToggleOrientation}
-                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15 capitalize"
+                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
                   title={`Orientation: ${orientationMode}`}
                 >
-                  <Rotate3D size={18} />
+                  {orientationMode === 'landscape' ? (
+                    <Monitor size={18} className="text-blue-400" />
+                  ) : orientationMode === 'portrait' ? (
+                    <Smartphone size={18} className="text-amber-400" />
+                  ) : (
+                    <Rotate3D size={18} />
+                  )}
                 </button>
 
                 {/* Sleep Timer */}
@@ -525,10 +578,11 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
               </motion.button>
             </div>
 
-            {/* Bottom Scrubber & Controls */}
-            <div className="pointer-events-auto space-y-2">
-              {/* Utility Row: Anime OP Skip Pill + A-B Looper Bar */}
+            {/* Bottom Controls & Scrubber */}
+            <div className="pointer-events-auto space-y-2.5">
+              {/* Utility Row Directly Above Seekbar */}
               <div className="flex items-center justify-between">
+                {/* Left: Anime OP Skip Pill */}
                 <IntroSkipPill
                   skipDuration={introSkipDuration}
                   onUpdateDuration={(newDur) => {
@@ -538,21 +592,40 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                   onSkipForward={(dur) => handleSkip(dur)}
                 />
 
-                <ABLooperBar
-                  isOpen={isLooperOpen}
-                  onClose={() => setIsLooperOpen(false)}
-                  currentTime={currentTime}
-                  loopA={loopA}
-                  loopB={loopB}
-                  onSetA={(t) => setLoopA(t)}
-                  onSetB={(t) => setLoopB(t)}
-                  onClearLoop={() => {
-                    setLoopA(null);
-                    setLoopB(null);
-                  }}
-                />
+                {/* Right: Orientation Button 2 (ABOVE SEEKBAR) & A-B Looper Bar */}
+                <div className="flex items-center space-x-2">
+                  <motion.button
+                    whileTap={{ scale: 0.92 }}
+                    onClick={handleToggleOrientation}
+                    className="px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-xl border border-white/20 text-white shadow-md flex items-center space-x-1.5 text-xs font-bold"
+                  >
+                    {orientationMode === 'landscape' ? (
+                      <Monitor size={14} className="text-blue-400" />
+                    ) : orientationMode === 'portrait' ? (
+                      <Smartphone size={14} className="text-amber-400" />
+                    ) : (
+                      <Rotate3D size={14} className="text-slate-200" />
+                    )}
+                    <span className="capitalize">{orientationMode}</span>
+                  </motion.button>
+
+                  <ABLooperBar
+                    isOpen={isLooperOpen}
+                    onClose={() => setIsLooperOpen(false)}
+                    currentTime={currentTime}
+                    loopA={loopA}
+                    loopB={loopB}
+                    onSetA={(t) => setLoopA(t)}
+                    onSetB={(t) => setLoopB(t)}
+                    onClearLoop={() => {
+                      setLoopA(null);
+                      setLoopB(null);
+                    }}
+                  />
+                </div>
               </div>
 
+              {/* Time Indicators */}
               <div className="flex items-center justify-between text-xs font-mono text-slate-300 font-semibold px-1">
                 <span>{formatTime(currentTime)}</span>
                 <span className="text-slate-400 font-normal">
@@ -561,7 +634,8 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                 </span>
               </div>
 
-              <div className="relative w-full flex items-center">
+              {/* Scrubber Range with Enriched Touch Hitbox */}
+              <div className="relative w-full flex items-center py-1">
                 <input
                   type="range"
                   min="0"
@@ -573,7 +647,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                     setCurrentTime(target);
                     if (videoRef.current) videoRef.current.currentTime = target;
                   }}
-                  className="w-full accent-blue-500 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer relative z-10"
+                  className="w-full accent-blue-500 h-2.5 bg-white/25 rounded-lg appearance-none cursor-pointer relative z-10"
                 />
 
                 {loopA !== null && duration > 0 && (
@@ -594,7 +668,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         )}
       </AnimatePresence>
 
-      {/* QUICK TOOLS BOTTOM DRAWER */}
+      {/* Light-Themed Player Tools Drawer */}
       <GlassSelect
         isOpen={isQuickToolsOpen}
         onClose={() => setIsQuickToolsOpen(false)}
@@ -665,7 +739,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         }}
       />
 
-      {/* Subtitle Customizer Studio 2.0 */}
+      {/* Light-Themed Subtitle Studio 2.0 */}
       <SubtitleModal
         isOpen={isSubtitleModalOpen}
         onClose={() => setIsSubtitleModalOpen(false)}

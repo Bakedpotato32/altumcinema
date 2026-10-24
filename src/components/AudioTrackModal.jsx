@@ -16,43 +16,41 @@ export const AudioTrackModal = ({
   return createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
-        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
         />
 
-        {/* Drawer */}
         <motion.div
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-          className="relative z-10 w-full max-w-sm mx-auto bg-slate-900/95 backdrop-blur-2xl border-t border-white/15 rounded-t-[32px] p-6 pb-10 shadow-2xl"
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="relative z-10 w-full max-w-sm mx-auto bg-white/95 backdrop-blur-3xl border-t border-white/90 rounded-t-[36px] p-6 pb-10 shadow-2xl text-left"
         >
-          <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-4" />
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4" />
 
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <Volume2 size={20} className="text-blue-400" />
-              <h3 className="text-base font-bold text-white">Audio Stream Tracks</h3>
+              <Volume2 size={20} className="text-blue-600" />
+              <h3 className="text-base font-black text-slate-900">Audio Stream Tracks</h3>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white"
+              className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="space-y-2 max-h-60 overflow-y-auto">
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {tracks.length === 0 ? (
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center">
-                <p className="text-xs font-bold text-white">Default Audio Stream</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                <p className="text-xs font-bold text-slate-800">Default Audio Stream</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   Single primary audio track playing through hardware decoder.
                 </p>
               </div>
@@ -72,11 +70,11 @@ export const AudioTrackModal = ({
                     }}
                     className={`w-full flex items-center justify-between p-3.5 rounded-2xl transition-all ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/30'
-                        : 'bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10'
+                        ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/25 border border-blue-600'
+                        : 'bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100'
                     }`}
                   >
-                    <span className="text-xs">{label}</span>
+                    <span className="text-xs font-medium">{label}</span>
                     {isSelected && <Check size={16} className="text-white" />}
                   </motion.button>
                 );

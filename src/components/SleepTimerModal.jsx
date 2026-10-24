@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Moon, Clock, Check, StopCircle } from 'lucide-react';
+import { X, Moon, Clock, StopCircle } from 'lucide-react';
 import { triggerHaptic } from '../services/haptics';
 
 const SLEEP_PRESETS = [
@@ -15,7 +15,7 @@ const SLEEP_PRESETS = [
 export const SleepTimerModal = ({
   isOpen,
   onClose,
-  activeTimerRemaining, // in seconds, or null
+  activeTimerRemaining,
   onSetTimer,
   onCancelTimer
 }) => {
@@ -31,44 +31,42 @@ export const SleepTimerModal = ({
   return createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
-        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
         />
 
-        {/* Drawer */}
         <motion.div
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-          className="relative z-10 w-full max-w-sm mx-auto bg-slate-900/95 backdrop-blur-3xl border-t border-white/15 rounded-t-[32px] p-6 pb-10 shadow-2xl"
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="relative z-10 w-full max-w-sm mx-auto bg-white/95 backdrop-blur-3xl border-t border-white/90 rounded-t-[36px] p-6 pb-10 shadow-2xl text-left"
         >
-          <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-4" />
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4" />
 
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <Moon size={20} className="text-indigo-400" />
-              <h3 className="text-base font-bold text-white">Sleep Timer</h3>
+              <Moon size={20} className="text-indigo-600" />
+              <h3 className="text-base font-black text-slate-900">Sleep Timer</h3>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white"
+              className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900"
             >
               <X size={18} />
             </button>
           </div>
 
           {activeTimerRemaining !== null && (
-            <div className="p-3.5 rounded-2xl bg-indigo-500/15 border border-indigo-400/30 mb-4 flex items-center justify-between">
+            <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200/70 mb-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Clock size={16} className="text-indigo-300 animate-pulse" />
-                <span className="text-xs font-mono font-bold text-white">
-                  Shuts off in: {formatRemaining(activeTimerRemaining)}
+                <Clock size={16} className="text-indigo-600 animate-pulse" />
+                <span className="text-xs font-mono font-bold text-indigo-900">
+                  Turns off in: {formatRemaining(activeTimerRemaining)}
                 </span>
               </div>
               <button
@@ -76,7 +74,7 @@ export const SleepTimerModal = ({
                   triggerHaptic('selection');
                   onCancelTimer();
                 }}
-                className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/30 flex items-center gap-1"
+                className="px-2.5 py-1 rounded-xl bg-rose-100 text-rose-600 text-[10px] font-bold border border-rose-200 flex items-center gap-1"
               >
                 <StopCircle size={12} />
                 <span>Turn Off</span>
@@ -88,15 +86,15 @@ export const SleepTimerModal = ({
             {SLEEP_PRESETS.map((preset) => (
               <motion.button
                 key={preset.minutes}
-                whileTap={{ scale: 0.96 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => {
                   triggerHaptic('selection');
                   onSetTimer(preset.minutes);
                   onClose();
                 }}
-                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 transition-all"
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-800 text-xs font-bold transition-all"
               >
-                <span className="text-xs font-medium">{preset.label}</span>
+                <span>{preset.label}</span>
                 <Clock size={15} className="text-slate-400" />
               </motion.button>
             ))}

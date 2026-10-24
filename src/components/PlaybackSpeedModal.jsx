@@ -17,33 +17,31 @@ export const PlaybackSpeedModal = ({
   return createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] flex flex-col justify-end">
-        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
         />
 
-        {/* Drawer Card */}
         <motion.div
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-          className="relative z-10 w-full max-w-lg mx-auto bg-slate-900/95 backdrop-blur-3xl border-t border-white/15 rounded-t-[32px] p-6 pb-10 shadow-2xl"
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="relative z-10 w-full max-w-sm mx-auto bg-white/95 backdrop-blur-3xl border-t border-white/90 rounded-t-[36px] p-6 pb-10 shadow-2xl text-left"
         >
-          <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-4" />
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4" />
 
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center space-x-2">
-              <Gauge size={20} className="text-blue-400" />
-              <h3 className="text-base font-bold text-white">Playback Speed</h3>
+              <Gauge size={20} className="text-blue-600" />
+              <h3 className="text-base font-black text-slate-900">Playback Speed</h3>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white"
+              className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900"
             >
               <X size={18} />
             </button>
@@ -63,12 +61,12 @@ export const PlaybackSpeedModal = ({
                   }}
                   className={`py-3 px-3 rounded-2xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all ${
                     isSelected
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 border border-blue-400'
-                      : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 border border-blue-600'
+                      : 'bg-slate-50 border border-slate-200/80 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <span>{spd === 1.0 ? '1.0x (Normal)' : `${spd}x`}</span>
-                  {isSelected && <Check size={14} className="text-blue-200" />}
+                  {isSelected && <Check size={14} className="text-white" />}
                 </motion.button>
               );
             })}

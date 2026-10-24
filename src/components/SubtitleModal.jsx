@@ -84,26 +84,26 @@ export const SubtitleModal = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/65 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
         />
 
-        {/* Bottom Drawer Card */}
+        {/* Light Theme Subtitle Studio Drawer */}
         <motion.div
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-          className="relative z-10 w-full max-w-lg mx-auto bg-slate-900/95 backdrop-blur-3xl border-t border-white/15 rounded-t-[32px] p-6 pb-10 shadow-2xl max-h-[85vh] overflow-y-auto"
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="relative z-10 w-full max-w-lg mx-auto bg-white/95 backdrop-blur-3xl border-t border-white/90 rounded-t-[36px] p-6 pb-10 shadow-2xl max-h-[85vh] overflow-y-auto text-left"
         >
-          <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-4" />
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4" />
 
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60">
                 <Subtitles size={18} />
               </div>
-              <h3 className="text-base font-bold text-white tracking-wide">
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
                 Subtitle Studio 2.0
               </h3>
             </div>
@@ -112,25 +112,27 @@ export const SubtitleModal = ({
                 triggerHaptic('selection');
                 onClose();
               }}
-              className="p-1.5 rounded-full bg-white/10 text-slate-300 hover:text-white"
+              className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
             >
               <X size={18} />
             </button>
           </div>
 
-          {/* Action Row: Browse In-App & Dialogue Jump */}
-          <div className="grid grid-cols-2 gap-2 mb-4">
+          {/* Navigation Buttons: File Explorer & Scene Jump */}
+          <div className="grid grid-cols-2 gap-2.5 mb-4">
             <button
               onClick={() => {
                 triggerHaptic('light');
                 onOpenExplorer();
               }}
-              className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-left flex items-center space-x-2.5"
+              className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-left flex items-center space-x-3 transition-colors"
             >
-              <FolderSearch size={18} className="text-blue-400 shrink-0" />
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                <FolderSearch size={16} />
+              </div>
               <div>
-                <span className="text-xs font-bold text-white block">File Explorer</span>
-                <span className="text-[10px] text-slate-400">Browse device folders</span>
+                <span className="text-xs font-bold text-slate-900 block">File Explorer</span>
+                <span className="text-[10px] text-slate-500">Pick device .srt/.vtt</span>
               </div>
             </button>
 
@@ -140,28 +142,30 @@ export const SubtitleModal = ({
                 onOpenDialogueSearch();
               }}
               disabled={!hasLoadedSubtitles}
-              className={`p-3 rounded-2xl border text-left flex items-center space-x-2.5 transition-all ${
+              className={`p-3.5 rounded-2xl border text-left flex items-center space-x-3 transition-all ${
                 hasLoadedSubtitles
-                  ? 'bg-blue-600/20 border-blue-400/40 text-white'
-                  : 'bg-white/5 border-white/5 opacity-50 cursor-not-allowed'
+                  ? 'bg-amber-50/70 border-amber-200/80 text-slate-900'
+                  : 'bg-slate-50/50 border-slate-200/40 opacity-50 cursor-not-allowed'
               }`}
             >
-              <Search size={18} className="text-amber-400 shrink-0" />
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                <Search size={16} />
+              </div>
               <div>
-                <span className="text-xs font-bold text-white block">Scene Jump</span>
-                <span className="text-[10px] text-slate-400">Search dialogue lines</span>
+                <span className="text-xs font-bold text-slate-900 block">Scene Jump</span>
+                <span className="text-[10px] text-slate-500">Search dialogue</span>
               </div>
             </button>
           </div>
 
-          {/* Load System File */}
-          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-5 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300">
-              {hasLoadedSubtitles ? 'Subtitles Active' : 'Import File from Android'}
+          {/* Direct File Upload Strip */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 mb-5 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-700">
+              {hasLoadedSubtitles ? 'Subtitles Active' : 'Import Local Subtitle File'}
             </span>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 rounded-xl bg-white/10 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-white/15"
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/20"
             >
               <Upload size={12} />
               <span>{hasLoadedSubtitles ? 'Replace' : 'Upload File'}</span>
@@ -175,9 +179,9 @@ export const SubtitleModal = ({
             />
           </div>
 
-          {/* Real-Time Live Preview Box */}
-          <div className="mb-5 p-5 rounded-2xl bg-black/70 border border-white/10 text-center relative overflow-hidden flex flex-col items-center justify-center min-h-[95px]">
-            <span className="absolute top-2 left-2 text-[9px] font-mono font-bold text-slate-500 uppercase">
+          {/* Live Preview Screen (Cinema Black Canvas Box) */}
+          <div className="mb-5 p-5 rounded-2xl bg-slate-950 border border-slate-800 text-center relative overflow-hidden flex flex-col items-center justify-center min-h-[96px] shadow-inner">
+            <span className="absolute top-2 left-2 text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">
               Live Preview
             </span>
             <p
@@ -195,13 +199,13 @@ export const SubtitleModal = ({
             </p>
           </div>
 
-          {/* Sync Calibration Section */}
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 mb-5 space-y-3">
+          {/* Sync Calibration Controls */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 mb-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Clock size={14} className="text-amber-400" /> SYNC TIMING OFFSET
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Clock size={14} className="text-amber-500" /> SYNC TIMING OFFSET
               </span>
-              <span className="text-xs font-mono font-bold text-blue-400">
+              <span className="text-xs font-mono font-bold text-blue-600">
                 {offsetMs > 0 ? `+${offsetMs} ms` : `${offsetMs} ms`}
               </span>
             </div>
@@ -209,46 +213,46 @@ export const SubtitleModal = ({
             <div className="grid grid-cols-5 gap-1.5">
               <button
                 onClick={() => adjustOffset(-500)}
-                className="py-2 rounded-xl bg-white/10 text-white text-xs font-bold font-mono hover:bg-white/15"
+                className="py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold font-mono hover:bg-slate-100 shadow-sm"
               >
                 -0.5s
               </button>
               <button
                 onClick={() => adjustOffset(-100)}
-                className="py-2 rounded-xl bg-white/10 text-white text-xs font-bold font-mono hover:bg-white/15"
+                className="py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold font-mono hover:bg-slate-100 shadow-sm"
               >
                 -0.1s
               </button>
               <button
                 onClick={resetOffset}
-                className="py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center justify-center"
+                className="py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold flex items-center justify-center shadow-sm"
               >
-                <RotateCcw size={12} />
+                <RotateCcw size={13} />
               </button>
               <button
                 onClick={() => adjustOffset(100)}
-                className="py-2 rounded-xl bg-white/10 text-white text-xs font-bold font-mono hover:bg-white/15"
+                className="py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold font-mono hover:bg-slate-100 shadow-sm"
               >
                 +0.1s
               </button>
               <button
                 onClick={() => adjustOffset(500)}
-                className="py-2 rounded-xl bg-white/10 text-white text-xs font-bold font-mono hover:bg-white/15"
+                className="py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold font-mono hover:bg-slate-100 shadow-sm"
               >
                 +0.5s
               </button>
             </div>
           </div>
 
-          {/* Sliders: Vertical Position, Font Size, Stroke, Opacity */}
+          {/* Sliders & Typography Settings */}
           <div className="space-y-4">
             {/* Vertical Position */}
             <div>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
                 <span className="flex items-center gap-1.5">
-                  <MoveVertical size={14} className="text-emerald-400" /> Vertical Position
+                  <MoveVertical size={14} className="text-emerald-500" /> Vertical Position
                 </span>
-                <span className="font-mono text-white">{bottomOffset}%</span>
+                <span className="font-mono text-slate-900 font-bold">{bottomOffset}%</span>
               </div>
               <input
                 type="range"
@@ -259,14 +263,14 @@ export const SubtitleModal = ({
                 onChange={(e) =>
                   onUpdateSettings({ ...subtitleSettings, bottomOffset: Number(e.target.value) })
                 }
-                className="w-full accent-emerald-500 h-2 bg-white/15 rounded-lg appearance-none cursor-pointer"
+                className="w-full accent-emerald-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
-            {/* Font Family Selector */}
+            {/* Typographic Font */}
             <div>
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Type size={14} className="text-indigo-400" /> Typographic Font
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2">
+                <Type size={14} className="text-indigo-500" /> Typographic Font
               </span>
               <div className="grid grid-cols-2 gap-2">
                 {FONT_PRESETS.map((fPreset) => {
@@ -279,10 +283,10 @@ export const SubtitleModal = ({
                         onUpdateSettings({ ...subtitleSettings, fontFamily: fPreset.value });
                       }}
                       style={{ fontFamily: fPreset.value }}
-                      className={`p-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      className={`p-3 rounded-2xl text-xs font-bold border transition-all ${
                         isSelected
-                          ? 'bg-blue-600/30 border-blue-400 text-white'
-                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/25'
+                          : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
                       {fPreset.label}
@@ -294,11 +298,11 @@ export const SubtitleModal = ({
 
             {/* Font Size */}
             <div>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
                 <span className="flex items-center gap-1.5">
-                  <Type size={14} className="text-indigo-400" /> Font Size
+                  <Type size={14} className="text-indigo-500" /> Font Size
                 </span>
-                <span className="font-mono text-white">{fontSize}px</span>
+                <span className="font-mono text-slate-900 font-bold">{fontSize}px</span>
               </div>
               <input
                 type="range"
@@ -309,17 +313,17 @@ export const SubtitleModal = ({
                 onChange={(e) =>
                   onUpdateSettings({ ...subtitleSettings, fontSize: Number(e.target.value) })
                 }
-                className="w-full accent-blue-500 h-2 bg-white/15 rounded-lg appearance-none cursor-pointer"
+                className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
-            {/* Text Stroke / Outline Width */}
+            {/* Outline Stroke Width */}
             <div>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
                 <span className="flex items-center gap-1.5">
-                  <SlidersHorizontal size={14} className="text-amber-400" /> Outline Stroke
+                  <SlidersHorizontal size={14} className="text-amber-500" /> Outline Stroke
                 </span>
-                <span className="font-mono text-white">{strokeWidth}px</span>
+                <span className="font-mono text-slate-900 font-bold">{strokeWidth}px</span>
               </div>
               <input
                 type="range"
@@ -330,15 +334,15 @@ export const SubtitleModal = ({
                 onChange={(e) =>
                   onUpdateSettings({ ...subtitleSettings, strokeWidth: Number(e.target.value) })
                 }
-                className="w-full accent-amber-500 h-2 bg-white/15 rounded-lg appearance-none cursor-pointer"
+                className="w-full accent-amber-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
-            {/* Background Pill Opacity */}
+            {/* Background Opacity */}
             <div>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
                 <span>Background Pill Opacity</span>
-                <span className="font-mono text-white">{bgOpacity}%</span>
+                <span className="font-mono text-slate-900 font-bold">{bgOpacity}%</span>
               </div>
               <input
                 type="range"
@@ -349,14 +353,14 @@ export const SubtitleModal = ({
                 onChange={(e) =>
                   onUpdateSettings({ ...subtitleSettings, bgOpacity: Number(e.target.value) })
                 }
-                className="w-full accent-blue-500 h-2 bg-white/15 rounded-lg appearance-none cursor-pointer"
+                className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
-            {/* Color Palette Chips */}
+            {/* Text Color Chips */}
             <div>
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Palette size={14} className="text-rose-400" /> Text Color
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2">
+                <Palette size={14} className="text-rose-500" /> Text Color
               </span>
               <div className="grid grid-cols-4 gap-2">
                 {COLOR_PRESETS.map((preset) => {
@@ -368,14 +372,14 @@ export const SubtitleModal = ({
                         triggerHaptic('selection');
                         onUpdateSettings({ ...subtitleSettings, color: preset.value });
                       }}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
+                      className={`py-2 px-2 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
                         isSelected
-                          ? 'border-blue-400 bg-blue-600/30 text-white'
-                          : 'border-white/10 bg-white/5 text-slate-300'
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
                       <span
-                        className="w-3 h-3 rounded-full border border-black/40 shadow-sm"
+                        className="w-3.5 h-3.5 rounded-full border border-slate-300 shadow-inner"
                         style={{ backgroundColor: preset.value }}
                       />
                       <span className="truncate">{preset.label}</span>

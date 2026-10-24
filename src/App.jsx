@@ -74,7 +74,7 @@ export default function App() {
     setIsScanning(false);
   };
 
-  const handleGrantPermission = () => {
+  const handlePermissionGranted = () => {
     localStorage.setItem('altum_storage_permission_granted', 'true');
     setHasPermission(true);
     triggerAutoScan();
@@ -236,7 +236,7 @@ export default function App() {
                   <Film size={36} className="mx-auto text-blue-500 mb-2" />
                   <h4 className="text-sm font-black text-slate-900">No Videos Found</h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                    Tap below to auto-scan your device storage or manually pick files.
+                    Tap below to grant access and auto-scan your device storage or pick files manually.
                   </p>
                   <div className="mt-4 flex justify-center gap-2">
                     <motion.button
@@ -352,11 +352,13 @@ export default function App() {
         onCenterAction={triggerAutoScan}
       />
 
+      {/* Permission Onboarding Sheet */}
       <PermissionModal
         isOpen={!hasPermission}
-        onGrant={handleGrantPermission}
+        onGranted={handlePermissionGranted}
       />
 
+      {/* PIN Keypad Modal */}
       <PinKeypadModal
         isOpen={isKeypadOpen}
         onClose={() => setIsKeypadOpen(false)}
@@ -365,6 +367,7 @@ export default function App() {
         onSuccess={handleKeypadSuccess}
       />
 
+      {/* Fullscreen Video Player */}
       {activeVideo && (
         <VideoPlayer
           video={activeVideo}

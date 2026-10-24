@@ -38,8 +38,9 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Configure Android Permissions & Full Storage Access
+      - name: Configure Android Permissions & Legacy Storage
         run: |
+          # 1. Insert permissions right before <application
           sed -i '/<application/i \
             <uses-permission android:name="android.permission.INTERNET" />\
             <uses-permission android:name="android.permission.VIBRATE" />\
@@ -49,6 +50,9 @@ jobs:
             <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\
             <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\
             <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' android/app/src/main/AndroidManifest.xml || true
+
+          # 2. Add requestLegacyExternalStorage="true" to <application tag
+          sed -i 's/<application/<application android:requestLegacyExternalStorage="true"/g' android/app/src/main/AndroidManifest.xml || true
 
       - name: Grant Execute Permissions for Gradle Wrapper
         run: chmod +x android/gradlew

@@ -4,7 +4,7 @@ import {
   Play, Pause, ArrowLeft, RotateCcw, RotateCw, 
   Lock, Unlock, Sliders, Crop, PictureInPicture2,
   Subtitles, Gauge, Camera, Repeat, Volume2, 
-  MoreHorizontal, Sparkles, FolderSearch, Search
+  MoreHorizontal, Sparkles, Rotate3D, Moon
 } from 'lucide-react';
 import { GestureOverlay } from './GestureOverlay';
 import { GlassSelect } from './GlassSelect';
@@ -14,7 +14,9 @@ import { SubtitleSearchModal } from './SubtitleSearchModal';
 import { PlaybackSpeedModal } from './PlaybackSpeedModal';
 import { AudioTrackModal } from './AudioTrackModal';
 import { SubtitleExplorerModal } from './SubtitleExplorerModal';
+import { SleepTimerModal } from './SleepTimerModal';
 import { ABLooperBar } from './ABLooperBar';
+import { IntroSkipPill } from './IntroSkipPill';
 import { audioEngine } from '../services/audioEngine';
 import { getActiveCue } from '../services/subtitles';
 import { captureVideoFrame } from '../services/snapshot';
@@ -34,6 +36,20 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
   const [zoomScale, setZoomScale] = useState(1.0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [aspectRatio, setAspectRatio] = useState(settings.aspectRatio || 'fit');
+
+  // Press-and-Hold 2.0x Speed State
+  const [isHold2xActive, setIsHold2xActive] = useState(false);
+  const previousSpeedRef = useRef(1.0);
+
+  // Screen Orientation State ('auto' | 'landscape' | 'portrait')
+  const [orientationMode, setOrientationMode] = useState('auto');
+
+  // Sleep Timer State (in remaining seconds, or null)
+  const [sleepTimerSeconds, setSleepTimerSeconds] = useState(null);
+  const [isSleepTimerModalOpen, setIsSleepTimerModalOpen] = useState(false);
+
+  // Intro / Anime OP Skip duration (default: 85 seconds)
+  const [introSkipDuration, setIntroSkipDuration] = useState(settings.introSkipDuration || 85);
 
   // Modals state
   const [isQuickToolsOpen, setIsQuickToolsOpen] = useState(false);
@@ -99,6 +115,34 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, [video]);
+
+  // Sleep Timer Countdown & Smooth Volume Fade
+  useEffect(() => {
+    if (sleepTimerSeconds === null) return;
+
+    const timer = setInterval(() => {
+      setSleepTimerSeconds((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          // Timer finished: pause video
+          if (videoRef.current) videoRef.current.pause();
+          setIsPlaying(false);
+          setShowControls(true);
+          return null;
+        }
+
+        // Smooth volume fade during last 30 seconds
+        if (prev <= 30 && videoRef.current) {
+          const fadeFactor = prev / 30;
+          videoRef.current.volume = Math.max(0, (volume / 100) * fadeFactor);
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [sleepTimerSeconds, volume]);
 
   const handleLoadedMetadata = () => {
     if (!videoRef.current) return;
@@ -197,6 +241,48 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     }
   };
 
+  // YouTube-Style Press-and-Hold 2.0x Fast Forward
+  const handlePressHold2xStart = () => {
+    if (!videoRef.current) return;
+    previousSpeedRef.current = playbackSpeed;
+    videoRef.current.playbackRate = 2.0;
+    setIsHold2xActive(true);
+  };
+
+  const handlePressHold2xEnd = () => {
+    if (!videoRef.current) return;
+    videoRef.current.playbackRate = previousSpeedRef.current;
+    setIsHold2xActive(false);
+  };
+
+  // Screen Orientation Controller
+  const handleToggleOrientation = async () => {
+    triggerHaptic('selection');
+    const nextMode = orientationMode === 'auto' ? 'landscape' : orientationMode === 'landscape' ? 'portrait' : 'auto';
+    setOrientationMode(nextMode);
+
+    try {
+      if (window.screen?.orientation?.lock) {
+        if (nextMode === 'landscape') await window.screen.orientation.lock('landscape');
+        else if (nextMode === 'portrait') await window.screen.orientation.lock('portrait');
+        else window.screen.orientation.unlock();
+      }
+    } catch (e) {
+      console.warn('Orientation lock notice:', e);
+    }
+  };
+
+  // Sleep Timer Handler
+  const handleSetSleepTimer = (minutes) => {
+    if (minutes === -1) {
+      // End of video: remaining duration
+      const remainingSec = Math.max(10, Math.floor(duration - currentTime));
+      setSleepTimerSeconds(remainingSec);
+    } else {
+      setSleepTimerSeconds(minutes * 60);
+    }
+  };
+
   const handleTakeSnapshot = async () => {
     if (!videoRef.current) return;
     triggerHaptic('heavy');
@@ -267,7 +353,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         />
       </div>
 
-      {/* Subtitles Overlay with Subtitle 2.0 Positioning, Font & Stroke */}
+      {/* Subtitles Overlay */}
       {currentSubtitleText && (
         <div 
           style={{ bottom: `${subtitleSettings.bottomOffset || 14}%` }}
@@ -289,7 +375,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         </div>
       )}
 
-      {/* MX Player Touch Gestures */}
+      {/* Gesture Engine with Press-and-Hold 2.0x Speed */}
       {!isLocked && (
         <GestureOverlay
           videoRef={videoRef}
@@ -307,6 +393,9 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           onSeekCommit={handleSeekCommit}
           zoomScale={zoomScale}
           setZoomScale={setZoomScale}
+          onPressHold2xStart={handlePressHold2xStart}
+          onPressHold2xEnd={handlePressHold2xEnd}
+          isHold2xActive={isHold2xActive}
         />
       )}
 
@@ -338,7 +427,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-30 pointer-events-none flex flex-col justify-between p-4 pt-6 pb-6 bg-gradient-to-b from-black/85 via-transparent to-black/90"
           >
-            {/* Top Bar */}
+            {/* Top Bar: Left Identity + Right Actions */}
             <div className="flex items-center justify-between pointer-events-auto pr-14">
               <div className="flex items-center space-x-3 min-w-0 pr-2">
                 <motion.button
@@ -358,6 +447,28 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
 
               {/* Action Tray */}
               <div className="flex items-center space-x-2 shrink-0">
+                {/* Screen Orientation Switcher */}
+                <button
+                  onClick={handleToggleOrientation}
+                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15 capitalize"
+                  title={`Orientation: ${orientationMode}`}
+                >
+                  <Rotate3D size={18} />
+                </button>
+
+                {/* Sleep Timer */}
+                <button
+                  onClick={() => setIsSleepTimerModalOpen(true)}
+                  className={`p-2.5 rounded-full backdrop-blur-lg border transition-all ${
+                    sleepTimerSeconds !== null
+                      ? 'bg-indigo-600/70 border-indigo-400 text-white'
+                      : 'bg-white/10 border-white/15 text-white'
+                  }`}
+                >
+                  <Moon size={18} />
+                </button>
+
+                {/* Audio Track Switcher */}
                 <button
                   onClick={() => setIsAudioTrackModalOpen(true)}
                   className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
@@ -365,6 +476,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                   <Volume2 size={18} />
                 </button>
 
+                {/* Subtitle Selector */}
                 <button
                   onClick={() => setIsSubtitleModalOpen(true)}
                   className={`p-2.5 rounded-full backdrop-blur-lg border transition-all ${
@@ -376,6 +488,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                   <Subtitles size={18} />
                 </button>
 
+                {/* Quick Tools Drawer (...) */}
                 <button
                   onClick={() => setIsQuickToolsOpen(true)}
                   className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
@@ -412,21 +525,33 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
               </motion.button>
             </div>
 
-            {/* Bottom Scrubber */}
+            {/* Bottom Scrubber & Controls */}
             <div className="pointer-events-auto space-y-2">
-              <ABLooperBar
-                isOpen={isLooperOpen}
-                onClose={() => setIsLooperOpen(false)}
-                currentTime={currentTime}
-                loopA={loopA}
-                loopB={loopB}
-                onSetA={(t) => setLoopA(t)}
-                onSetB={(t) => setLoopB(t)}
-                onClearLoop={() => {
-                  setLoopA(null);
-                  setLoopB(null);
-                }}
-              />
+              {/* Utility Row: Anime OP Skip Pill + A-B Looper Bar */}
+              <div className="flex items-center justify-between">
+                <IntroSkipPill
+                  skipDuration={introSkipDuration}
+                  onUpdateDuration={(newDur) => {
+                    setIntroSkipDuration(newDur);
+                    onUpdateSettings({ ...settings, introSkipDuration: newDur });
+                  }}
+                  onSkipForward={(dur) => handleSkip(dur)}
+                />
+
+                <ABLooperBar
+                  isOpen={isLooperOpen}
+                  onClose={() => setIsLooperOpen(false)}
+                  currentTime={currentTime}
+                  loopA={loopA}
+                  loopB={loopB}
+                  onSetA={(t) => setLoopA(t)}
+                  onSetB={(t) => setLoopB(t)}
+                  onClearLoop={() => {
+                    setLoopA(null);
+                    setLoopB(null);
+                  }}
+                />
+              </div>
 
               <div className="flex items-center justify-between text-xs font-mono text-slate-300 font-semibold px-1">
                 <span>{formatTime(currentTime)}</span>
@@ -480,6 +605,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           if (val === 'aspect') setIsAspectSelectOpen(true);
           if (val === 'eq') setIsEQOpen(true);
           if (val === 'loop') setIsLooperOpen(true);
+          if (val === 'sleep') setIsSleepTimerModalOpen(true);
           if (val === 'pip') handlePiP();
           if (val === 'shot') handleTakeSnapshot();
           if (val === 'sub_explorer') setIsSubtitleExplorerOpen(true);
@@ -488,6 +614,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         options={[
           { label: `Playback Speed (${playbackSpeed}x)`, value: 'speed' },
           { label: `Aspect Ratio (${aspectRatio.toUpperCase()})`, value: 'aspect' },
+          { label: 'Sleep Timer', value: 'sleep' },
           { label: 'Dialogue Scene Jump (Search)', value: 'sub_search' },
           { label: 'Browse In-App Subtitles (.srt)', value: 'sub_explorer' },
           { label: 'A-B Scene Looper', value: 'loop' },
@@ -495,6 +622,15 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           { label: 'Take HD Video Screenshot', value: 'shot' },
           { label: 'Picture-in-Picture (PiP)', value: 'pip' }
         ]}
+      />
+
+      {/* Sleep Timer Modal */}
+      <SleepTimerModal
+        isOpen={isSleepTimerModalOpen}
+        onClose={() => setIsSleepTimerModalOpen(false)}
+        activeTimerRemaining={sleepTimerSeconds}
+        onSetTimer={handleSetSleepTimer}
+        onCancelTimer={() => setSleepTimerSeconds(null)}
       />
 
       {/* Audio Track Switcher Modal */}

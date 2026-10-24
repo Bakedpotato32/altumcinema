@@ -1,52 +1,68 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { generateVideoThumbnail } from './thumbnail';
+import { Capacitor } from '@capacitor/core';
+import { requestDeviceStoragePermissions } from './permissions';
 
-const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov', '.3gp', '.flv'];
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.avi', '.mov', '.3gp', '.flv', '.ts'];
 
-const SCAN_DIRECTORIES = [
+const SCAN_TARGETS = [
   { name: 'Downloads', path: 'Download' },
-  { name: 'Camera / DCIM', path: 'DCIM/Camera' },
+  { name: 'Camera', path: 'DCIM/Camera' },
+  { name: 'DCIM', path: 'DCIM' },
   { name: 'Movies', path: 'Movies' },
   { name: 'WhatsApp Video', path: 'Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video' },
-  { name: 'Pictures', path: 'Pictures' }
+  { name: 'WhatsApp Media', path: 'WhatsApp/Media/WhatsApp Video' },
+  { name: 'Pictures', path: 'Pictures' },
+  { name: 'Screen Records', path: 'Movies/Screenrecords' }
 ];
 
 export const scanDeviceStorage = async () => {
+  if (!Capacitor.isNativePlatform()) {
+    return [];
+  }
+
+  const hasPermission = await requestDeviceStoragePermissions();
+  if (!hasPermission) {
+    console.warn('Storage permission not granted by user.');
+    return [];
+  }
+
   const detectedFolders = [];
 
-  for (const dirTarget of SCAN_DIRECTORIES) {
+  for (const target of SCAN_TARGETS) {
     try {
       const result = await Filesystem.readdir({
-        path: dirTarget.path,
+        path: target.path,
         directory: Directory.ExternalStorage
       });
 
+      if (!result || !result.files) continue;
+
       const videoFiles = result.files.filter((file) => {
-        const name = typeof file === 'string' ? file : file.name;
-        return VIDEO_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext));
+        const fileName = typeof file === 'string' ? file : file.name;
+        return VIDEO_EXTENSIONS.some((ext) => fileName.toLowerCase().endsWith(ext));
       });
 
       if (videoFiles.length > 0) {
         const parsedVideos = await Promise.all(
           videoFiles.map(async (file, idx) => {
             const fileName = typeof file === 'string' ? file : file.name;
-            const filePath = `${dirTarget.path}/${fileName}`;
+            const fullRelativePath = `${target.path}/${fileName}`;
 
-            let fileUri = filePath;
+            let fileUri = fullRelativePath;
             try {
-              const uriResult = await Filesystem.getUri({
-                path: filePath,
+              const uriRes = await Filesystem.getUri({
+                path: fullRelativePath,
                 directory: Directory.ExternalStorage
               });
-              fileUri = uriResult.uri;
+              fileUri = uriRes.uri;
             } catch (e) {}
 
             return {
-              id: `dev_${dirTarget.name}_${idx}_${fileName}`,
+              id: `vid_${target.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${idx}_${fileName}`,
               name: fileName,
-              path: filePath,
-              url: fileUri,
-              folder: dirTarget.name,
+              path: fullRelativePath,
+              url: Capacitor.convertFileSrc ? Capacitor.convertFileSrc(fileUri) : fileUri,
+              folder: target.name,
               duration: 0,
               currentTime: 0,
               size: file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : 'Local',
@@ -57,29 +73,30 @@ export const scanDeviceStorage = async () => {
         );
 
         detectedFolders.push({
-          id: `folder_${dirTarget.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-          name: dirTarget.name,
-          path: `/storage/emulated/0/${dirTarget.path}`,
+          id: `folder_${target.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          name: target.name,
+          path: `/storage/emulated/0/${target.path}`,
           videoCount: parsedVideos.length,
           totalSize: `${parsedVideos.length} Videos`,
           videos: parsedVideos
         });
       }
-    } catch (err) {
-      // Directory may not exist on this specific device, proceed to next
+    } catch (dirErr) {
+      // Directory does not exist on this device, skip cleanly
     }
   }
 
   return detectedFolders;
 };
 
-// In-app directory browser for custom subtitle picking
 export const listDirectoryContents = async (dirPath = 'Download') => {
   try {
     const result = await Filesystem.readdir({
       path: dirPath,
       directory: Directory.ExternalStorage
     });
+
+    if (!result || !result.files) return [];
 
     return result.files.map((item) => {
       const isString = typeof item === 'string';

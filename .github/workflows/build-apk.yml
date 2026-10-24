@@ -44,11 +44,39 @@ jobs:
           cp android-native/MediaScannerPlugin.java android/app/src/main/java/com/altumcinema/app/
           cp android-native/MainActivity.java android/app/src/main/java/com/altumcinema/app/
 
+      - name: Generate High-Resolution Android App Icons from icon.png
+        run: |
+          if [ -f "icon.png" ]; then
+            python3 -c "
+          from PIL import Image
+          import os
+
+          img = Image.open('icon.png')
+          res_dir = 'android/app/src/main/res'
+          sizes = {
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192
+          }
+          for folder, size in sizes.items():
+              target_dir = os.path.join(res_dir, folder)
+              os.makedirs(target_dir, exist_ok=True)
+              resized = img.resize((size, size), Image.Resampling.LANCZOS)
+              resized.save(os.path.join(target_dir, 'ic_launcher.png'))
+              resized.save(os.path.join(target_dir, 'ic_launcher_round.png'))
+              resized.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
+          print('Successfully generated all mipmap launcher icons!')
+          "
+          fi
+
       - name: Configure Android Permissions & Legacy Storage
         run: |
           sed -i '/<application/i \
             <uses-permission android:name="android.permission.INTERNET" />\
             <uses-permission android:name="android.permission.VIBRATE" />\
+            <uses-permission android:name="android.permission.WAKE_LOCK" />\
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\

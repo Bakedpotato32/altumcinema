@@ -2,6 +2,24 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
 
 export const MediaScanner = registerPlugin('MediaScanner');
 
+export const setDeviceOrientation = async (mode = 'auto') => {
+  if (!Capacitor.isNativePlatform()) {
+    try {
+      if (window.screen?.orientation?.lock) {
+        if (mode === 'landscape') await window.screen.orientation.lock('landscape');
+        else if (mode === 'portrait') await window.screen.orientation.lock('portrait');
+        else window.screen.orientation.unlock();
+      }
+    } catch (e) {}
+    return;
+  }
+  try {
+    await MediaScanner.setOrientation({ orientation: mode });
+  } catch (err) {
+    console.error('Failed setting native orientation:', err);
+  }
+};
+
 export const checkDeviceStoragePermissions = async () => {
   if (!Capacitor.isNativePlatform()) {
     return { granted: true };

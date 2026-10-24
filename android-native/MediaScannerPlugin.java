@@ -3,12 +3,17 @@ package com.altumcinema.app;
 import android.Manifest;
 import android.content.ContentUris;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.media.ThumbnailUtils;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.util.Base64;
+import android.util.Size;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,6 +22,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
@@ -41,6 +47,25 @@ import java.util.Map;
     }
 )
 public class MediaScannerPlugin extends Plugin {
+
+    @PluginMethod
+    public void setOrientation(PluginCall call) {
+        String orientation = call.getString("orientation", "auto");
+        getActivity().runOnUiThread(() -> {
+            try {
+                if ("landscape".equalsIgnoreCase(orientation)) {
+                    getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                } else if ("portrait".equalsIgnoreCase(orientation)) {
+                    getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                } else {
+                    getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                }
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to set orientation: " + e.getMessage());
+            }
+        });
+    }
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
@@ -133,6 +158,7 @@ public class MediaScannerPlugin extends Plugin {
                     int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
                     int bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME);
 
+                    int count = 0;
                     while (cursor.moveToNext()) {
                         long id = cursor.getLong(idColumn);
                         String name = cursor.getString(nameColumn);
@@ -150,6 +176,27 @@ public class MediaScannerPlugin extends Plugin {
 
                         Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
 
+                        // Native Video Thumbnail Generation
+                        String thumbBase64 = null;
+                        try {
+                            Bitmap bmp = null;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && path != null && new File(path).exists()) {
+                                bmp = ThumbnailUtils.createVideoThumbnail(new File(path), new Size(320, 180), null);
+                            } else if (path != null && new File(path).exists()) {
+                                bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(320, 180), null);
+                            }
+
+                            if (bmp != null) {
+                                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                bmp.compress(Bitmap.CompressFormat.JPEG, 65, stream);
+                                byte[] byteArray = stream.toByteArray();
+                                thumbBase64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
+                                bmp.recycle();
+                            }
+                        } catch (Throwable ignored) {}
+
                         JSObject videoObj = new JSObject();
                         videoObj.put("id", "media_" + id);
                         videoObj.put("name", name);
@@ -157,6 +204,7 @@ public class MediaScannerPlugin extends Plugin {
                         videoObj.put("url", path != null ? path : contentUri.toString());
                         videoObj.put("duration", durationMs > 0 ? (int)(durationMs / 1000) : 0);
                         videoObj.put("currentTime", 0);
+                        videoObj.put("thumbnail", thumbBase64);
 
                         double sizeMb = sizeBytes > 0 ? (double)sizeBytes / (1024 * 1024) : 0;
                         videoObj.put("size", sizeMb > 1024 ? String.format("%.2f GB", sizeMb / 1024) : String.format("%.1f MB", sizeMb));
@@ -174,6 +222,7 @@ public class MediaScannerPlugin extends Plugin {
                         }
 
                         folderMap.get(folder).put(videoObj);
+                        count++;
                     }
                 }
             }

@@ -22,6 +22,7 @@ import { getActiveCue } from '../services/subtitles';
 import { captureVideoFrame } from '../services/snapshot';
 import { triggerHaptic } from '../services/haptics';
 import { saveVideoProgress } from '../services/storage';
+import { setDeviceOrientation } from '../services/nativeMedia';
 
 export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegisterBackHandler }) => {
   const videoRef = useRef(null);
@@ -38,7 +39,6 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [aspectRatio, setAspectRatio] = useState(settings.aspectRatio || 'fit');
 
-  // Press-and-Hold 2.0x Speed
   const [isHold2xActive, setIsHold2xActive] = useState(false);
   const previousSpeedRef = useRef(1.0);
 
@@ -91,7 +91,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
 
   const controlsTimeoutRef = useRef(null);
 
-  // Screen WakeLock: Prevent screen timeout while video plays
+  // WakeLock: prevent display from sleeping
   useEffect(() => {
     const acquireWakeLock = async () => {
       try {
@@ -116,7 +116,13 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
     };
   }, [isPlaying]);
 
-  // Priority Back Button Stack for Child Modals inside Player
+  // Clean exit: reset orientation to portrait
+  const handlePlayerClose = async () => {
+    await setDeviceOrientation('portrait');
+    onClose();
+  };
+
+  // Hardware Back Button Integration
   useEffect(() => {
     if (onRegisterBackHandler) {
       onRegisterBackHandler(() => {
@@ -131,8 +137,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
         if (isEQOpen) { setIsEQOpen(false); return true; }
         if (isLooperOpen) { setIsLooperOpen(false); return true; }
         if (isLocked) { setIsLocked(false); return true; }
-        // If no modal open, close player and return to library
-        onClose();
+        handlePlayerClose();
         return true;
       });
     }
@@ -165,6 +170,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
 
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      setDeviceOrientation('portrait');
     };
   }, [video]);
 
@@ -304,21 +310,12 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
     setIsHold2xActive(false);
   };
 
-  // Screen Orientation Controller: Cycles Auto -> Landscape -> Portrait
+  // Direct Native Orientation Switching (Landscape <-> Portrait <-> Auto)
   const handleToggleOrientation = async () => {
     triggerHaptic('selection');
     const nextMode = orientationMode === 'auto' ? 'landscape' : orientationMode === 'landscape' ? 'portrait' : 'auto';
     setOrientationMode(nextMode);
-
-    try {
-      if (window.screen?.orientation?.lock) {
-        if (nextMode === 'landscape') await window.screen.orientation.lock('landscape');
-        else if (nextMode === 'portrait') await window.screen.orientation.lock('portrait');
-        else window.screen.orientation.unlock();
-      }
-    } catch (e) {
-      console.warn('Orientation lock notice:', e);
-    }
+    await setDeviceOrientation(nextMode);
   };
 
   const handleSetSleepTimer = (minutes) => {
@@ -479,7 +476,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
               <div className="flex items-center space-x-3 min-w-0 pr-2">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
-                  onClick={onClose}
+                  onClick={handlePlayerClose}
                   className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-lg border border-white/15 shrink-0"
                 >
                   <ArrowLeft size={20} />
@@ -634,7 +631,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings, onRegi
                 </span>
               </div>
 
-              {/* Scrubber Range with Enriched Touch Hitbox */}
+              {/* Scrubber Range with Touch Hitbox */}
               <div className="relative w-full flex items-center py-1">
                 <input
                   type="range"

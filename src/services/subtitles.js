@@ -1,4 +1,4 @@
-// Subtitle parser for .srt and .vtt formats with dynamic offset calculation
+// Subtitle parser for .srt and .vtt formats with dynamic offset calculation and dialogue search
 export const parseSubtitles = (rawContent) => {
   if (!rawContent || typeof rawContent !== 'string') return [];
 
@@ -37,7 +37,7 @@ export const parseSubtitles = (rawContent) => {
     const textLines = lines.slice(timeLineIndex + 1);
     const text = textLines
       .join('\n')
-      .replace(/<[^>]+>/g, '') // Strip HTML tags like <i>, <b>
+      .replace(/<[^>]+>/g, '') // Strip HTML tags
       .trim();
 
     if (text && !isNaN(startTime) && !isNaN(endTime)) {
@@ -48,10 +48,16 @@ export const parseSubtitles = (rawContent) => {
   return cues.sort((a, b) => a.startTime - b.startTime);
 };
 
-// Finds active subtitle cue considering user offset in milliseconds
 export const getActiveCue = (cues, currentTimeSeconds, offsetMs = 0) => {
   if (!cues || cues.length === 0) return '';
   const adjustedTime = currentTimeSeconds - (offsetMs / 1000);
   const active = cues.find((c) => adjustedTime >= c.startTime && adjustedTime <= c.endTime);
   return active ? active.text : '';
+};
+
+// Search dialogue lines across all subtitle cues
+export const searchSubtitles = (cues, query) => {
+  if (!cues || !query || query.trim() === '') return [];
+  const cleanQ = query.toLowerCase().trim();
+  return cues.filter((cue) => cue.text.toLowerCase().includes(cleanQ));
 };

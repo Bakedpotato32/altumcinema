@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Film, HardDrive, ShieldCheck, Sliders, Play, Plus, FolderPlus } from 'lucide-react';
+import { Film, HardDrive, ShieldCheck, Sliders, Play, Plus, FolderPlus, RefreshCw } from 'lucide-react';
 import { AmbientBlobs } from './components/AmbientBlobs';
 import { TopHeader } from './components/TopHeader';
 import { SearchBarAndFilters } from './components/SearchBarAndFilters';
@@ -21,6 +21,7 @@ import {
   getVaultPin, saveVaultPin,
   getVaultVideos, moveVideoToVault, restoreVideoFromVault
 } from './services/storage';
+import { scanDeviceStorage } from './services/deviceScanner';
 import { generateVideoThumbnail } from './services/thumbnail';
 import { triggerHaptic } from './services/haptics';
 
@@ -29,6 +30,7 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [hasPermission, setHasPermission] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
 
   // Library & Navigation State
   const [folders, setFolders] = useState([]);
@@ -42,13 +44,17 @@ export default function App() {
   const [vaultPin, setVaultPin] = useState(null);
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);
-  const [keypadMode, setKeypadMode] = useState('unlock'); // 'unlock' | 'setup'
+  const [keypadMode, setKeypadMode] = useState('unlock');
 
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     const granted = localStorage.getItem('altum_storage_permission_granted');
-    if (!granted) setHasPermission(false);
+    if (!granted) {
+      setHasPermission(false);
+    } else {
+      triggerAutoScan();
+    }
 
     setFolders(getStoredFolders());
     setVaultVideos(getVaultVideos());
@@ -58,10 +64,20 @@ export default function App() {
     if (history.length > 0) setRecentVideo(history[0]);
   }, []);
 
+  const triggerAutoScan = async () => {
+    setIsScanning(true);
+    const scanned = await scanDeviceStorage();
+    if (scanned && scanned.length > 0) {
+      setFolders(scanned);
+      saveFolders(scanned);
+    }
+    setIsScanning(false);
+  };
+
   const handleGrantPermission = () => {
     localStorage.setItem('altum_storage_permission_granted', 'true');
     setHasPermission(true);
-    fileInputRef.current?.click();
+    triggerAutoScan();
   };
 
   const handleFileChange = async (e) => {
@@ -115,7 +131,6 @@ export default function App() {
     }
   };
 
-  // Lock video into Private Vault
   const handleLockVideo = (video) => {
     if (!vaultPin) {
       setKeypadMode('setup');
@@ -132,7 +147,6 @@ export default function App() {
     }
   };
 
-  // Restore video from Private Vault
   const handleRestoreVideo = (video) => {
     const res = restoreVideoFromVault(video);
     if (res) {
@@ -142,7 +156,6 @@ export default function App() {
     }
   };
 
-  // Keypad Success Handler
   const handleKeypadSuccess = (pin) => {
     if (keypadMode === 'setup') {
       saveVaultPin(pin);
@@ -152,7 +165,6 @@ export default function App() {
     setIsKeypadOpen(false);
   };
 
-  // Filter public videos
   const allVideos = folders.flatMap((f) =>
     (f.videos || []).map((v) => ({ ...v, folder: f.name }))
   );
@@ -179,7 +191,7 @@ export default function App() {
       />
 
       <div className="relative z-10 w-full max-w-lg mx-auto">
-        <TopHeader onScanClick={() => fileInputRef.current?.click()} />
+        <TopHeader onScanClick={triggerAutoScan} />
 
         <SearchBarAndFilters
           searchQuery={searchQuery}
@@ -200,33 +212,42 @@ export default function App() {
             )}
 
             <PoppyBanners
-              onScanClick={() => fileInputRef.current?.click()}
+              onScanClick={triggerAutoScan}
               onSafeClick={() => setActiveTab('vault')}
             />
 
             <div className="px-5 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black tracking-wider text-slate-500 uppercase">
-                  All Media ({filteredVideos.length})
+                <h3 className="text-xs font-black tracking-wider text-slate-500 uppercase flex items-center gap-2">
+                  <span>All Media ({filteredVideos.length})</span>
+                  {isScanning && <RefreshCw size={12} className="animate-spin text-blue-500" />}
                 </h3>
-                <span className="text-[11px] font-bold text-blue-600">YouTube Feed</span>
+                <button
+                  onClick={triggerAutoScan}
+                  className="text-[11px] font-bold text-blue-600 flex items-center gap-1"
+                >
+                  <RefreshCw size={11} className={isScanning ? 'animate-spin' : ''} />
+                  <span>Rescan Phone</span>
+                </button>
               </div>
 
               {filteredVideos.length === 0 ? (
                 <div className="p-8 text-center glass-panel rounded-3xl border border-white/90">
                   <Film size={36} className="mx-auto text-blue-500 mb-2" />
-                  <h4 className="text-sm font-black text-slate-900">No Videos Loaded</h4>
+                  <h4 className="text-sm font-black text-slate-900">No Videos Found</h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                    Your library is completely clean. Tap "+ Scan" or the button below to add local videos from your device.
+                    Tap below to auto-scan your device storage or manually pick files.
                   </p>
-                  <motion.button
-                    whileTap={{ scale: 0.94 }}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md shadow-blue-500/30"
-                  >
-                    <FolderPlus size={14} />
-                    <span>Import Local Videos</span>
-                  </motion.button>
+                  <div className="mt-4 flex justify-center gap-2">
+                    <motion.button
+                      whileTap={{ scale: 0.94 }}
+                      onClick={triggerAutoScan}
+                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md shadow-blue-500/30"
+                    >
+                      <RefreshCw size={14} className={isScanning ? 'animate-spin' : ''} />
+                      <span>Auto Scan Storage</span>
+                    </motion.button>
+                  </div>
                 </div>
               ) : (
                 filteredVideos.map((video) => (
@@ -255,17 +276,17 @@ export default function App() {
               <div className="px-5">
                 <div className="p-8 text-center glass-panel rounded-3xl border border-white/90">
                   <HardDrive size={36} className="mx-auto text-indigo-500 mb-2" />
-                  <h4 className="text-sm font-black text-slate-900">No Directories Indexed</h4>
+                  <h4 className="text-sm font-black text-slate-900">No Directories Found</h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                    Import videos to automatically generate and group directories.
+                    Auto-scan device folders or add videos manually.
                   </p>
                   <motion.button
                     whileTap={{ scale: 0.94 }}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={triggerAutoScan}
                     className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md shadow-indigo-500/30"
                   >
-                    <Plus size={14} />
-                    <span>Add Folders</span>
+                    <RefreshCw size={14} />
+                    <span>Scan Directories</span>
                   </motion.button>
                 </div>
               </div>
@@ -322,23 +343,20 @@ export default function App() {
         )}
       </div>
 
-      {/* Floating Bottom Navigation Glass Dock */}
       <FloatingDock
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
           if (tab === 'folders') setSelectedFolder(null);
         }}
-        onCenterAction={() => fileInputRef.current?.click()}
+        onCenterAction={triggerAutoScan}
       />
 
-      {/* First-Launch Permission Onboarding Sheet */}
       <PermissionModal
         isOpen={!hasPermission}
         onGrant={handleGrantPermission}
       />
 
-      {/* PIN Keypad Modal */}
       <PinKeypadModal
         isOpen={isKeypadOpen}
         onClose={() => setIsKeypadOpen(false)}
@@ -347,7 +365,6 @@ export default function App() {
         onSuccess={handleKeypadSuccess}
       />
 
-      {/* Fullscreen Video Player */}
       {activeVideo && (
         <VideoPlayer
           video={activeVideo}

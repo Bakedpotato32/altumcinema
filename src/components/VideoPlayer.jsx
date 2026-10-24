@@ -3,13 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, ArrowLeft, RotateCcw, RotateCw, 
   Lock, Unlock, Sliders, Crop, PictureInPicture2,
-  Subtitles, Gauge, Camera, Repeat, Check, Sparkles
+  Subtitles, Gauge, Camera, Repeat, Volume2, 
+  MoreHorizontal, Sparkles, FolderSearch, Search
 } from 'lucide-react';
 import { GestureOverlay } from './GestureOverlay';
 import { GlassSelect } from './GlassSelect';
 import { AudioEQModal } from './AudioEQModal';
 import { SubtitleModal } from './SubtitleModal';
+import { SubtitleSearchModal } from './SubtitleSearchModal';
 import { PlaybackSpeedModal } from './PlaybackSpeedModal';
+import { AudioTrackModal } from './AudioTrackModal';
+import { SubtitleExplorerModal } from './SubtitleExplorerModal';
 import { ABLooperBar } from './ABLooperBar';
 import { audioEngine } from '../services/audioEngine';
 import { getActiveCue } from '../services/subtitles';
@@ -32,19 +36,26 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
   const [aspectRatio, setAspectRatio] = useState(settings.aspectRatio || 'fit');
 
   // Modals state
+  const [isQuickToolsOpen, setIsQuickToolsOpen] = useState(false);
   const [isAspectSelectOpen, setIsAspectSelectOpen] = useState(false);
   const [isEQOpen, setIsEQOpen] = useState(false);
   const [isSubtitleModalOpen, setIsSubtitleModalOpen] = useState(false);
+  const [isSubtitleExplorerOpen, setIsSubtitleExplorerOpen] = useState(false);
+  const [isSubtitleSearchOpen, setIsSubtitleSearchOpen] = useState(false);
   const [isSpeedModalOpen, setIsSpeedModalOpen] = useState(false);
   const [isLooperOpen, setIsLooperOpen] = useState(false);
+  const [isAudioTrackModalOpen, setIsAudioTrackModalOpen] = useState(false);
+
+  // Audio Tracks state
+  const [audioTracksList, setAudioTracksList] = useState([]);
+  const [activeAudioIndex, setActiveAudioIndex] = useState(0);
 
   // A-B Looper state
   const [loopA, setLoopA] = useState(null);
   const [loopB, setLoopB] = useState(null);
 
-  // Snapshot flash & notification state
+  // Snapshot flash state
   const [isShutterFlashing, setIsShutterFlashing] = useState(false);
-  const [recentSnapshot, setRecentSnapshot] = useState(null);
 
   // Subtitles state
   const [subtitles, setSubtitles] = useState([]);
@@ -55,14 +66,16 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
       color: '#ffffff',
       bgOpacity: 70,
       offsetMs: 0,
-      hasShadow: true
+      strokeWidth: 2,
+      bottomOffset: 14,
+      fontFamily: "'Plus Jakarta Sans', sans-serif"
     }
   );
 
   const controlsTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && (volume > 100 || settings?.audio?.bassBoost > 0)) {
       audioEngine.init(videoRef.current);
       audioEngine.setVolumeMultiplier(volume);
       if (settings?.audio) {
@@ -74,7 +87,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
       navigator.mediaSession.metadata = new window.MediaMetadata({
         title: video.name || 'Local Video',
         artist: 'AltumCinema Pro',
-        album: 'Video Vault'
+        album: video.folder || 'Device Storage'
       });
       navigator.mediaSession.setActionHandler('play', () => handleTogglePlay());
       navigator.mediaSession.setActionHandler('pause', () => handleTogglePlay());
@@ -87,18 +100,32 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     };
   }, [video]);
 
-  // Volume engine synchronization
-  useEffect(() => {
-    if (videoRef.current) {
-      if (volume <= 100) {
-        videoRef.current.volume = volume / 100;
-        audioEngine.setVolumeMultiplier(100);
-      } else {
-        videoRef.current.volume = 1.0;
-        audioEngine.setVolumeMultiplier(volume);
+  const handleLoadedMetadata = () => {
+    if (!videoRef.current) return;
+    setDuration(videoRef.current.duration);
+    videoRef.current.playbackRate = playbackSpeed;
+
+    if (video.currentTime && settings.rememberPosition) {
+      videoRef.current.currentTime = video.currentTime;
+    }
+
+    if (videoRef.current.audioTracks) {
+      const tracks = [];
+      for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+        tracks.push(videoRef.current.audioTracks[i]);
+      }
+      setAudioTracksList(tracks);
+    }
+  };
+
+  const handleSelectAudioTrack = (index) => {
+    setActiveAudioIndex(index);
+    if (videoRef.current && videoRef.current.audioTracks) {
+      for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+        videoRef.current.audioTracks[i].enabled = (i === index);
       }
     }
-  }, [volume]);
+  };
 
   const scheduleControlsHide = () => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -126,7 +153,6 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     const curr = videoRef.current.currentTime;
     setCurrentTime(curr);
 
-    // A-B Looper execution: seek back to Point A when reaching Point B
     if (loopA !== null && loopB !== null && loopB > loopA) {
       if (curr >= loopB || curr < loopA) {
         videoRef.current.currentTime = loopA;
@@ -134,7 +160,6 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
       }
     }
 
-    // Dynamic Subtitle Sync
     if (subtitles.length > 0) {
       const activeText = getActiveCue(subtitles, curr, subtitleSettings.offsetMs || 0);
       setCurrentSubtitleText(activeText);
@@ -172,20 +197,12 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
     }
   };
 
-  // Instant High-Res Screenshot Snapper
   const handleTakeSnapshot = async () => {
     if (!videoRef.current) return;
     triggerHaptic('heavy');
-
-    // Trigger visual camera shutter flash
     setIsShutterFlashing(true);
-    setTimeout(() => setIsShutterFlashing(false), 250);
-
-    const result = await captureVideoFrame(videoRef.current, video.name);
-    if (result) {
-      setRecentSnapshot(result);
-      setTimeout(() => setRecentSnapshot(null), 3800);
-    }
+    setTimeout(() => setIsShutterFlashing(false), 200);
+    await captureVideoFrame(videoRef.current, video.name);
   };
 
   const handlePiP = async () => {
@@ -219,12 +236,18 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden">
-      {/* Visual Camera Shutter White Flash Overlay */}
+      {/* Zero-Overhead Hardware Dimming Overlay */}
+      <div 
+        className="absolute inset-0 z-10 bg-black pointer-events-none transition-opacity"
+        style={{ opacity: (100 - brightness) / 100 }}
+      />
+
+      {/* Shutter White Flash */}
       {isShutterFlashing && (
-        <div className="absolute inset-0 z-50 bg-white pointer-events-none transition-opacity duration-200" />
+        <div className="absolute inset-0 z-40 bg-white pointer-events-none" />
       )}
 
-      {/* Video Canvas with Zoom Transform */}
+      {/* Video Element */}
       <div 
         className="w-full h-full flex items-center justify-center overflow-hidden"
         style={{ transform: `scale(${zoomScale})`, transition: 'transform 0.05s linear' }}
@@ -235,33 +258,29 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           autoPlay
           playsInline
           onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={() => {
-            if (videoRef.current) {
-              setDuration(videoRef.current.duration);
-              videoRef.current.playbackRate = playbackSpeed;
-              if (video.currentTime && settings.rememberPosition) {
-                videoRef.current.currentTime = video.currentTime;
-              }
-            }
-          }}
+          onLoadedMetadata={handleLoadedMetadata}
           onEnded={() => {
             setIsPlaying(false);
             setShowControls(true);
           }}
-          style={{ filter: `brightness(${brightness}%)` }}
           className={`w-full h-full ${aspectClassMap[aspectRatio] || 'object-contain'}`}
         />
       </div>
 
-      {/* Styled Subtitle Overlay */}
+      {/* Subtitles Overlay with Subtitle 2.0 Positioning, Font & Stroke */}
       {currentSubtitleText && (
-        <div className="absolute bottom-20 left-4 right-4 z-20 pointer-events-none flex justify-center">
+        <div 
+          style={{ bottom: `${subtitleSettings.bottomOffset || 14}%` }}
+          className="absolute left-4 right-4 z-20 pointer-events-none flex justify-center transition-all"
+        >
           <p
             style={{
               fontSize: `${subtitleSettings.fontSize || 20}px`,
               color: subtitleSettings.color || '#ffffff',
+              fontFamily: subtitleSettings.fontFamily || "'Plus Jakarta Sans', sans-serif",
               backgroundColor: `rgba(0, 0, 0, ${(subtitleSettings.bgOpacity ?? 70) / 100})`,
-              textShadow: subtitleSettings.hasShadow ? '0px 2px 4px rgba(0,0,0,0.9)' : 'none'
+              WebkitTextStroke: `${subtitleSettings.strokeWidth ?? 2}px black`,
+              textShadow: '0 2px 4px rgba(0,0,0,0.8)'
             }}
             className="px-4 py-1.5 rounded-2xl text-center font-medium shadow-2xl backdrop-blur-xs max-w-xl whitespace-pre-line leading-relaxed"
           >
@@ -270,7 +289,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         </div>
       )}
 
-      {/* MX Player Touch Gesture Overlay */}
+      {/* MX Player Touch Gestures */}
       {!isLocked && (
         <GestureOverlay
           videoRef={videoRef}
@@ -291,7 +310,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         />
       )}
 
-      {/* Top Floating Action: Child Lock */}
+      {/* Child Lock Floating Trigger */}
       <div className="absolute top-5 right-5 z-40">
         <motion.button
           whileTap={{ scale: 0.9 }}
@@ -310,33 +329,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         </motion.button>
       </div>
 
-      {/* Snapshot Confirmation Pill Toast */}
-      <AnimatePresence>
-        {recentSnapshot && (
-          <motion.div
-            initial={{ opacity: 0, x: -30, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -30, scale: 0.9 }}
-            className="absolute bottom-24 left-5 z-40 flex items-center space-x-3 p-2.5 pr-4 rounded-2xl bg-black/80 backdrop-blur-2xl border border-white/20 text-white shadow-2xl"
-          >
-            <img
-              src={recentSnapshot.dataUrl}
-              alt="Snapshot"
-              className="w-12 h-8 rounded-lg object-cover border border-white/20 shrink-0"
-            />
-            <div>
-              <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                <Check size={11} /> Frame Captured
-              </span>
-              <p className="text-[11px] font-mono text-slate-300 font-bold">
-                {formatTime(recentSnapshot.timestamp)} • Saved
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* HUD Controls */}
+      {/* Responsive HUD Controls */}
       <AnimatePresence>
         {showControls && !isLocked && (
           <motion.div
@@ -347,52 +340,31 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           >
             {/* Top Bar */}
             <div className="flex items-center justify-between pointer-events-auto pr-14">
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3 min-w-0 pr-2">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={onClose}
-                  className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-lg border border-white/15"
+                  className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-lg border border-white/15 shrink-0"
                 >
                   <ArrowLeft size={20} />
                 </motion.button>
-                <div className="truncate max-w-[170px]">
+                <div className="truncate">
                   <h4 className="text-sm font-bold text-white truncate">{video.name}</h4>
-                  <span className="text-[10px] text-slate-400 font-mono">AltumCinema Engine</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {playbackSpeed !== 1.0 ? `${playbackSpeed}x • ` : ''}AltumCinema Pro
+                  </span>
                 </div>
               </div>
 
-              {/* Action Buttons Tray */}
-              <div className="flex items-center space-x-2">
-                {/* Screenshot Snapper */}
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleTakeSnapshot}
-                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15 hover:bg-white/20"
-                >
-                  <Camera size={18} />
-                </motion.button>
-
-                {/* A-B Scene Looper Toggle */}
+              {/* Action Tray */}
+              <div className="flex items-center space-x-2 shrink-0">
                 <button
-                  onClick={() => setIsLooperOpen((prev) => !prev)}
-                  className={`p-2.5 rounded-full backdrop-blur-lg border transition-all ${
-                    loopA !== null && loopB !== null
-                      ? 'bg-emerald-600/70 border-emerald-400 text-white'
-                      : 'bg-white/10 border-white/15 text-white'
-                  }`}
+                  onClick={() => setIsAudioTrackModalOpen(true)}
+                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
                 >
-                  <Repeat size={18} />
+                  <Volume2 size={18} />
                 </button>
 
-                {/* Playback Speed Pill */}
-                <button
-                  onClick={() => setIsSpeedModalOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/10 text-white font-mono text-xs font-bold backdrop-blur-lg border border-white/15 hover:bg-white/20"
-                >
-                  {playbackSpeed}x
-                </button>
-
-                {/* Subtitle Studio Button */}
                 <button
                   onClick={() => setIsSubtitleModalOpen(true)}
                   className={`p-2.5 rounded-full backdrop-blur-lg border transition-all ${
@@ -404,28 +376,11 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                   <Subtitles size={18} />
                 </button>
 
-                {/* Audio EQ Button */}
                 <button
-                  onClick={() => setIsEQOpen(true)}
+                  onClick={() => setIsQuickToolsOpen(true)}
                   className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
                 >
-                  <Sliders size={18} />
-                </button>
-
-                {/* Aspect Ratio Button */}
-                <button
-                  onClick={() => setIsAspectSelectOpen(true)}
-                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
-                >
-                  <Crop size={18} />
-                </button>
-
-                {/* Picture in Picture */}
-                <button
-                  onClick={handlePiP}
-                  className="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-lg border border-white/15"
-                >
-                  <PictureInPicture2 size={18} />
+                  <MoreHorizontal size={18} />
                 </button>
               </div>
             </div>
@@ -457,9 +412,8 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
               </motion.button>
             </div>
 
-            {/* Bottom Scrubber & A-B Looper Bar */}
+            {/* Bottom Scrubber */}
             <div className="pointer-events-auto space-y-2">
-              {/* Floating A-B Looper Utility Controls */}
               <ABLooperBar
                 isOpen={isLooperOpen}
                 onClose={() => setIsLooperOpen(false)}
@@ -482,7 +436,6 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                 </span>
               </div>
 
-              {/* Scrubber Range with A-B Marker Overlays */}
               <div className="relative w-full flex items-center">
                 <input
                   type="range"
@@ -498,15 +451,12 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
                   className="w-full accent-blue-500 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer relative z-10"
                 />
 
-                {/* Point A Marker Pin on Scrubber */}
                 {loopA !== null && duration > 0 && (
                   <div
                     className="absolute top-0 bottom-0 w-1 bg-blue-400 z-20 pointer-events-none rounded-full shadow-sm shadow-blue-400"
                     style={{ left: `${(loopA / duration) * 100}%` }}
                   />
                 )}
-
-                {/* Point B Marker Pin on Scrubber */}
                 {loopB !== null && duration > 0 && (
                   <div
                     className="absolute top-0 bottom-0 w-1 bg-emerald-400 z-20 pointer-events-none rounded-full shadow-sm shadow-emerald-400"
@@ -519,7 +469,67 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         )}
       </AnimatePresence>
 
-      {/* Modals & Drawers */}
+      {/* QUICK TOOLS BOTTOM DRAWER */}
+      <GlassSelect
+        isOpen={isQuickToolsOpen}
+        onClose={() => setIsQuickToolsOpen(false)}
+        title="Player Tools & Settings"
+        selectedValue=""
+        onSelect={(val) => {
+          if (val === 'speed') setIsSpeedModalOpen(true);
+          if (val === 'aspect') setIsAspectSelectOpen(true);
+          if (val === 'eq') setIsEQOpen(true);
+          if (val === 'loop') setIsLooperOpen(true);
+          if (val === 'pip') handlePiP();
+          if (val === 'shot') handleTakeSnapshot();
+          if (val === 'sub_explorer') setIsSubtitleExplorerOpen(true);
+          if (val === 'sub_search') setIsSubtitleSearchOpen(true);
+        }}
+        options={[
+          { label: `Playback Speed (${playbackSpeed}x)`, value: 'speed' },
+          { label: `Aspect Ratio (${aspectRatio.toUpperCase()})`, value: 'aspect' },
+          { label: 'Dialogue Scene Jump (Search)', value: 'sub_search' },
+          { label: 'Browse In-App Subtitles (.srt)', value: 'sub_explorer' },
+          { label: 'A-B Scene Looper', value: 'loop' },
+          { label: '5-Band Audio Equalizer & Boost', value: 'eq' },
+          { label: 'Take HD Video Screenshot', value: 'shot' },
+          { label: 'Picture-in-Picture (PiP)', value: 'pip' }
+        ]}
+      />
+
+      {/* Audio Track Switcher Modal */}
+      <AudioTrackModal
+        isOpen={isAudioTrackModalOpen}
+        onClose={() => setIsAudioTrackModalOpen(false)}
+        tracks={audioTracksList}
+        activeTrackIndex={activeAudioIndex}
+        onSelectTrack={handleSelectAudioTrack}
+      />
+
+      {/* In-App Subtitle Directory Explorer */}
+      <SubtitleExplorerModal
+        isOpen={isSubtitleExplorerOpen}
+        onClose={() => setIsSubtitleExplorerOpen(false)}
+        initialPath={video.path ? video.path.substring(0, video.path.lastIndexOf('/')) : 'Download'}
+        onSubtitleSelected={(parsed, name) => {
+          setSubtitles(parsed);
+          alert(`Loaded subtitles: ${name}`);
+        }}
+      />
+
+      {/* Dialogue Search Modal */}
+      <SubtitleSearchModal
+        isOpen={isSubtitleSearchOpen}
+        onClose={() => setIsSubtitleSearchOpen(false)}
+        subtitles={subtitles}
+        onSeekToTime={(time) => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = time;
+          }
+        }}
+      />
+
+      {/* Subtitle Customizer Studio 2.0 */}
       <SubtitleModal
         isOpen={isSubtitleModalOpen}
         onClose={() => setIsSubtitleModalOpen(false)}
@@ -533,8 +543,17 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
           setSubtitles(parsedList);
           setIsSubtitleModalOpen(false);
         }}
+        onOpenExplorer={() => {
+          setIsSubtitleModalOpen(false);
+          setIsSubtitleExplorerOpen(true);
+        }}
+        onOpenDialogueSearch={() => {
+          setIsSubtitleModalOpen(false);
+          setIsSubtitleSearchOpen(true);
+        }}
       />
 
+      {/* Playback Speed Modal */}
       <PlaybackSpeedModal
         isOpen={isSpeedModalOpen}
         onClose={() => setIsSpeedModalOpen(false)}
@@ -542,6 +561,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         onSelectSpeed={handleSpeedChange}
       />
 
+      {/* Aspect Ratio Modal */}
       <GlassSelect
         isOpen={isAspectSelectOpen}
         onClose={() => setIsAspectSelectOpen(false)}
@@ -560,6 +580,7 @@ export const VideoPlayer = ({ video, onClose, settings, onUpdateSettings }) => {
         ]}
       />
 
+      {/* Equalizer Modal */}
       <AudioEQModal
         isOpen={isEQOpen}
         onClose={() => setIsEQOpen(false)}

@@ -51,52 +51,70 @@ export default function App() {
   const fileInputRef = useRef(null);
   const playerBackHandlerRef = useRef(null);
 
-  // Native Android Hardware / Gesture Back Button Handling
+  // Live Navigation State Stack for Hardware Back Button
+  const navStateRef = useRef({});
+  navStateRef.current = {
+    activeVideo,
+    selectedFolder,
+    activeTab,
+    isKeypadOpen,
+    searchQuery,
+    playerBackHandler: playerBackHandlerRef.current
+  };
+
   useEffect(() => {
-    let backListener = null;
+    let sub = null;
 
     if (Capacitor.isNativePlatform()) {
-      backListener = CapApp.addListener('backButton', () => {
-        // Priority 1: Video Player Child Modals or Player itself
-        if (playerBackHandlerRef.current) {
-          const handled = playerBackHandlerRef.current();
+      CapApp.addListener('backButton', () => {
+        const state = navStateRef.current;
+
+        // 1. Video Player Modal or Player Exit
+        if (state.playerBackHandler) {
+          const handled = state.playerBackHandler();
           if (handled) return;
         }
 
-        if (activeVideo) {
+        if (state.activeVideo) {
           setActiveVideo(null);
           return;
         }
 
-        // Priority 2: PIN Keypad Modal
-        if (isKeypadOpen) {
+        // 2. PIN Keypad Modal
+        if (state.isKeypadOpen) {
           setIsKeypadOpen(false);
           return;
         }
 
-        // Priority 3: Inside a folder view -> go back to all folders
-        if (selectedFolder) {
+        // 3. Inside a folder -> return to folder directory list
+        if (state.selectedFolder) {
           setSelectedFolder(null);
           return;
         }
 
-        // Priority 4: On other tabs -> return to Home (Videos)
-        if (activeTab !== 'videos') {
+        // 4. Clear Search query if active
+        if (state.searchQuery && state.searchQuery.trim() !== '') {
+          setSearchQuery('');
+          return;
+        }
+
+        // 5. If on another tab -> return to Home (Videos)
+        if (state.activeTab !== 'videos') {
           setActiveTab('videos');
           return;
         }
 
-        // Priority 5: At root screen -> exit app
+        // 6. At root Home screen -> Exit App
         CapApp.exitApp();
+      }).then((listener) => {
+        sub = listener;
       });
     }
 
     return () => {
-      if (backListener) {
-        backListener.then((sub) => sub.remove()).catch(() => {});
-      }
+      if (sub) sub.remove();
     };
-  }, [activeVideo, isKeypadOpen, selectedFolder, activeTab]);
+  }, []);
 
   useEffect(() => {
     const initializeStorage = async () => {
@@ -433,7 +451,10 @@ export default function App() {
       {activeVideo && (
         <VideoPlayer
           video={activeVideo}
-          onClose={() => setActiveVideo(null)}
+          onClose={() => {
+            setActiveVideo(null);
+            playerBackHandlerRef.current = null;
+          }}
           settings={settings}
           onUpdateSettings={setSettings}
           onRegisterBackHandler={(handler) => {

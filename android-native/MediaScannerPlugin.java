@@ -165,21 +165,21 @@ public class MediaScannerPlugin extends Plugin {
                                 name = path != null && !path.isEmpty() ? new File(path).getName() : "Video_" + id;
                             }
 
-                            // Capture lightweight thumbnail for the first 25 videos
+                            // Generate high-resolution 640x360 thumbnail for the top 12 videos immediately
                             String thumbBase64 = null;
-                            if (thumbCount < 25) {
+                            if (thumbCount < 12) {
                                 try {
                                     Bitmap bmp = null;
                                     if (Build.VERSION.SDK_INT >= 29) {
                                         Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
-                                        bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(200, 112), null);
+                                        bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(640, 360), null);
                                     } else if (path != null && new File(path).exists()) {
                                         bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
                                     }
 
                                     if (bmp != null) {
                                         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                                        bmp.compress(Bitmap.CompressFormat.JPEG, 60, stream);
+                                        bmp.compress(Bitmap.CompressFormat.JPEG, 82, stream);
                                         byte[] byteArray = stream.toByteArray();
                                         thumbBase64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
                                         bmp.recycle();
@@ -245,15 +245,17 @@ public class MediaScannerPlugin extends Plugin {
         getBridge().execute(() -> {
             try {
                 Bitmap bmp = null;
+                // High-resolution 640x360 frame capture
                 if (Build.VERSION.SDK_INT >= 29 && id != -1) {
                     Uri contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
-                    bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(200, 112), null);
+                    bmp = getContext().getContentResolver().loadThumbnail(contentUri, new Size(640, 360), null);
                 } else if (!path.isEmpty() && new File(path).exists()) {
                     bmp = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Images.Thumbnails.MINI_KIND);
                 }
+
                 if (bmp != null) {
                     ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                    bmp.compress(Bitmap.CompressFormat.JPEG, 60, stream);
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 82, stream);
                     byte[] byteArray = stream.toByteArray();
                     String b64 = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP);
                     bmp.recycle();

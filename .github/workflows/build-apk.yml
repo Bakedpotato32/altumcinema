@@ -44,15 +44,21 @@ jobs:
           cp android-native/MediaScannerPlugin.java android/app/src/main/java/com/altumcinema/app/
           cp android-native/MainActivity.java android/app/src/main/java/com/altumcinema/app/
 
-      - name: Generate High-Resolution Android App Icons from icon.png
+      - name: Generate Safe-Zone Android App Icons from icon.png
         run: |
           if [ -f "icon.png" ]; then
-            python3 -m pip install pillow --break-system-packages 2>/dev/null || python3 -m pip install pillow
+            python3 -m pip install --break-system-packages Pillow 2>/dev/null || python3 -m pip install Pillow
             python3 -c "
           from PIL import Image
           import os
 
-          img = Image.open('icon.png')
+          img = Image.open('icon.png').convert('RGBA')
+
+          # Sample corner color for matching edge padding
+          bg_color = img.getpixel((5, 5))
+          if len(bg_color) == 3:
+              bg_color = (bg_color[0], bg_color[1], bg_color[2], 255)
+
           res_dir = 'android/app/src/main/res'
           sizes = {
               'mipmap-mdpi': 48,
@@ -61,14 +67,23 @@ jobs:
               'mipmap-xxhdpi': 144,
               'mipmap-xxxhdpi': 192
           }
+
           for folder, size in sizes.items():
               target_dir = os.path.join(res_dir, folder)
               os.makedirs(target_dir, exist_ok=True)
-              resized = img.resize((size, size), Image.Resampling.LANCZOS)
-              resized.save(os.path.join(target_dir, 'ic_launcher.png'))
-              resized.save(os.path.join(target_dir, 'ic_launcher_round.png'))
-              resized.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
-          print('Successfully generated all mipmap launcher icons!')
+
+              # Scale artwork to 65% of canvas size to fit inside 72dp Android mask
+              canvas = Image.new('RGBA', (size, size), bg_color)
+              content_size = int(size * 0.65)
+              resized = img.resize((content_size, content_size), Image.Resampling.LANCZOS)
+              offset = ((size - content_size) // 2, (size - content_size) // 2)
+              canvas.paste(resized, offset, resized)
+
+              canvas.save(os.path.join(target_dir, 'ic_launcher.png'))
+              canvas.save(os.path.join(target_dir, 'ic_launcher_round.png'))
+              canvas.save(os.path.join(target_dir, 'ic_launcher_foreground.png'))
+
+          print('Generated safe-zone adaptive icons without cropping!')
           "
           fi
 
@@ -81,6 +96,7 @@ jobs:
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\
             <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />\
+            <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\
             <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\
             <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' android/app/src/main/AndroidManifest.xml || true
 

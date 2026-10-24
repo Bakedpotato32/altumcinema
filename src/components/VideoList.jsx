@@ -1,10 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, ArrowLeft, Clock, Film } from 'lucide-react';
+import { ArrowLeft, Clock, Play } from 'lucide-react';
+import { VideoThumb } from './VideoThumb';
 import { triggerHaptic } from '../services/haptics';
 
 export const VideoList = ({ folder, onBack, onPlayVideo }) => {
   const formatDuration = (sec) => {
+    if (!sec || isNaN(sec)) return '0:00';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -37,7 +39,7 @@ export const VideoList = ({ folder, onBack, onPlayVideo }) => {
         </p>
       </div>
 
-      {/* Video Cards */}
+      {/* Video Cards with HD 16:9 Thumbnail Previews */}
       <div className="space-y-2.5">
         {folder.videos?.map((video) => {
           const progressPercent = video.duration
@@ -52,20 +54,12 @@ export const VideoList = ({ folder, onBack, onPlayVideo }) => {
                 triggerHaptic('medium');
                 onPlayVideo({ ...video, folder: folder.name });
               }}
-              className="p-3.5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/70 flex items-center justify-between shadow-sm cursor-pointer hover:border-blue-400/50 transition-all"
+              className="p-3 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/70 flex items-center justify-between shadow-sm cursor-pointer hover:border-blue-400/50 transition-all"
             >
-              <div className="flex items-center space-x-3 min-w-0">
-                {/* Video Icon Thumbnail with Progress Bar */}
-                <div className="relative w-16 h-12 rounded-xl bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
-                  {video.thumbnail ? (
-                    <img
-                      src={video.thumbnail}
-                      alt="Thumbnail"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Play size={16} className="text-white/70 fill-white/50" />
-                  )}
+              <div className="flex items-center space-x-3.5 min-w-0">
+                {/* 16:9 HD Thumbnail */}
+                <div className="relative w-24 h-15 rounded-xl overflow-hidden shrink-0 shadow-sm border border-slate-200/50">
+                  <VideoThumb video={video} className="w-full h-full" />
                   {progressPercent > 0 && (
                     <div className="absolute bottom-0 inset-x-0 h-1 bg-white/20">
                       <div
